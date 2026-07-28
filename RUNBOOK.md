@@ -55,12 +55,12 @@ cd livekit-local && ./run-livekit.sh
 - Config: `livekit.yaml` in this directory, used as-is
 - No health endpoint — check the script's own log for `starting LiveKit server`
 
-### algojob_agent_server — LiveKit interview agent worker (native)
+### algojob-agent-server — LiveKit interview agent worker (native)
 ```bash
-cd algojob_agent_server && ./run-agent.sh
+cd algojob-agent-server && ./run-agent.sh
 ```
 - No port — outbound worker only (connects to LiveKit, doesn't listen)
-- Requires: `livekit-local` and `workload-proctoring` already running
+- Requires: `livekit-local` and `algojob-proctoring-mise` already running
 - `.env` already correct as-is (`LIVEKIT_URL=ws://localhost:7880`,
   `PROCTOR_API_URL=ws://localhost:8080/ws/proctor`) — nothing to add
 - Check: log line `registered worker` with `"url": "ws://localhost:7880"`
@@ -75,9 +75,9 @@ cd algojobs_service && ./run.sh
   `PROCTOR_API_URL=ws://localhost:8080/ws/proctor` — nothing to add
 - Health: `curl localhost:8000/health`
 
-### apex_mircoservice — AlgoApex assessment service (FastAPI + SQS consumers)
+### algoapex-microservice — AlgoApex assessment service (FastAPI + SQS consumers)
 ```bash
-cd apex_mircoservice && ./run.sh
+cd algoapex-microservice && ./run.sh
 ```
 - Port: **8001** (from `.env`'s `API_PORT=8001` — `run.sh`/`scripts/run_api.sh` reads it explicitly
   since bash doesn't source `.env` on its own)
@@ -89,17 +89,17 @@ cd apex_mircoservice && ./run.sh
 - Optional standalone workers (only if you need them running outside the API process):
   `./scripts/run_worker.sh signup` / `test_completed` / `cron_consumer`
 
-### workload-personalized-learning — content generation (FastAPI)
+### Algojob-debug-mise — content generation (FastAPI)
 ```bash
-cd workload-personalized-learning && ./run.sh
+cd Algojob-debug-mise && ./run.sh
 ```
 - Port: **8070**
 - Requires: nothing local — only cloud Mongo
 - Health: `curl localhost:8070/health`
 
-### workload-proctoring — AI exam proctoring (FastAPI + YOLO/MediaPipe)
+### algojob-proctoring-mise — AI exam proctoring (FastAPI + YOLO/MediaPipe)
 ```bash
-cd workload-proctoring && ./run.sh
+cd algojob-proctoring-mise && ./run.sh
 ```
 - Port: **8080**
 - Requires: nothing local — only cloud Mongo (`.env`'s `MONGODB_URI` was repointed at the shared
@@ -139,8 +139,8 @@ cd algojobs_frontend && ./run.sh
 | livekit (native) | 7880 / 7881 / 7882 |
 | algojobs_service | 8000 |
 | apex | 8001 |
-| workload-personalized-learning | 8070 |
-| workload-proctoring | 8080 |
+| Algojob-debug-mise | 8070 |
+| algojob-proctoring-mise | 8080 |
 | keycloak (infra) | 8180 |
 | elasticmq (infra) | 9324 (+9325 UI) |
 
@@ -149,8 +149,8 @@ cd algojobs_frontend && ./run.sh
 ```bash
 curl localhost:8000/health          # algojobs_service
 curl localhost:8001/v1/health       # apex
-curl localhost:8070/health          # workload-personalized-learning
-curl localhost:8080/health          # workload-proctoring
+curl localhost:8070/health          # Algojob-debug-mise
+curl localhost:8080/health          # algojob-proctoring-mise
 curl localhost:5001/health          # nest
 curl localhost:3000                 # frontend
 curl localhost:3000/api/config      # confirm livekitUrl is ws://localhost:7880, not a cloud host
@@ -369,9 +369,9 @@ everything wired up.
 realm once at `http://your-server:8180` (admin/admin by default — change it via `KEYCLOAK_ADMIN` /
 `KEYCLOAK_ADMIN_PASSWORD`).
 
-## workload-proctoring is NOT in this image
+## algojob-proctoring-mise is NOT in this image
 
-The container runs **7 of the 8 services**. `workload-proctoring` is excluded because it depends on
+The container runs **7 of the 8 services**. `algojob-proctoring-mise` is excluded because it depends on
 **mediapipe**, which publishes only `manylinux_2_28_x86_64`, `macosx_11_0_arm64`, and `win_amd64`
 wheels — there is **no Linux ARM64 wheel**, so including it fails the build on Apple Silicon and
 rules out ARM servers (Graviton/Ampere) entirely:
@@ -384,13 +384,13 @@ have a source distribution or wheel for the current platform
 With it excluded the image builds natively on **both arm64 and x86_64**, with no QEMU emulation and
 no `platform:` pin.
 
-**What you lose:** nothing starts on port 8080. `algojobs_service` and `algojob_agent_server` keep
+**What you lose:** nothing starts on port 8080. `algojobs_service` and `algojob-agent-server` keep
 `PROCTOR_API_URL=ws://localhost:8080/ws/proctor` in their `.env`, which simply won't answer.
 Proctoring is opt-in per interview (the `proctoring_enabled` job-metadata flag), so non-proctored
 interviews are unaffected — but proctored ones will fail to connect.
 
 **To run proctoring**, either start it natively alongside the container
-(`cd workload-proctoring && ./run.sh`), or add it back to the image —
+(`cd algojob-proctoring-mise && ./run.sh`), or add it back to the image —
 restore its dependency/source layers and runtime `COPY` in the `Dockerfile`, re-add its
 `supervisord.conf` program, and pin `platform: linux/amd64` in `docker-compose.yml`. That last step
 makes the image **x86_64-only**.
@@ -473,4 +473,4 @@ apex and nest's `.env` files have their real AWS SQS values commented out just a
 `SQS_ENDPOINT_URL`/`SQS_*_URL` overrides — swap the comments to point back at production queues if
 you ever need to. `ENABLE_CRON_JOB` in apex's `.env` was also turned off locally (it fires paid LLM
 question-generation on a schedule); run it on demand with
-`./scripts/run_worker.sh cron --now` from `apex_mircoservice/`.
+`./scripts/run_worker.sh cron --now` from `algoapex-microservice/`.

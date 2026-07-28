@@ -1,14 +1,11 @@
-# This repo holds ONLY the orchestration layer for the AlgoJob stack.
-# Each service lives in its own GitHub repo and is cloned in by ./clone.sh —
-# they must NOT be committed here (that would create nested-repo state and
-# duplicate history that is already tracked elsewhere).
-algojob_agent_server/
+
+algojob-agent-server/
 algojobs_service/
 algojob_nest/
 algojobs_frontend/
-apex_mircoservice/
-workload-proctoring/
-workload-personalized-learning/
+algoapex-microservice/
+algojob-proctoring-mise/
+Algojob-debug-mise/
 
 # Secrets. Every .env in this tree holds live credentials (Atlas, Neon, AWS,
 # Razorpay, WhatsApp, LiveKit). .env.example is the committed template; real

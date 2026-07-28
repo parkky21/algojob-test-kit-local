@@ -20,13 +20,13 @@ LOG_DIR="$ROOT_DIR/logs"
 # Run a single service by hand the exact same way: cd <dir> && ./<script>.
 SERVICES=(
   "livekit      |livekit-local                                              |./run-livekit.sh"
-  "proctoring   |workload-proctoring                                        |./run.sh"
+  "proctoring   |algojob-proctoring-mise                                    |./run.sh"
   "algojobsvc   |algojobs_service                                           |./run.sh"
-  "apex         |apex_mircoservice                                          |./run.sh"
-  "personalized |workload-personalized-learning                             |./run.sh"
+  "apex         |algoapex-microservice                                      |./run.sh"
+  "personalized |Algojob-debug-mise                                         |./run.sh"
   "nest         |algojob_nest                                               |./run.sh"
   "frontend     |algojobs_frontend                                          |./run.sh"
-  "agent        |algojob_agent_server                                       |./run-agent.sh"
+  "agent        |algojob-agent-server                                       |./run-agent.sh"
 )
 
 COLORS=(31 32 33 34 35 36 91 92 93 94)

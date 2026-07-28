@@ -1,16 +1,10 @@
 #!/usr/bin/env bash
-# Clones (or updates) the seven AlgoJob service repos into this directory.
+# Clones (or updates) the seven AlgoJob service repos into this directory,
+# each into a folder matching its repo name.
 #
 #   ./clone.sh                 clone/update all seven, each on its default branch
 #   ./clone.sh local-run       override the branch for every repo that has one
-#   ./clone.sh --list          show the folder -> repo -> branch mapping and exit
-#
-# IMPORTANT: the folder names are not cosmetic. The Dockerfile's build context
-# is this directory and it COPYs each service by exact path, and
-# docker-compose.yml mounts each service's .env by exact path. Several repo
-# names differ from the folder they must land in (and `apex_mircoservice`
-# carries a typo that is load-bearing), so the mapping below is explicit
-# rather than derived from the repo name.
+#   ./clone.sh --list          show the repo -> branch mapping and exit
 set -uo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -18,25 +12,25 @@ cd "$ROOT_DIR"
 
 ORG="https://github.com/algorootprod"
 
-# folder|repo|default-branch
-# workload-proctoring and workload-personalized-learning were split out of the
-# old algojob_microservice_python monorepo (see git history there) into their
+# repo (= folder name)|default-branch
+# algojob-proctoring-mise and Algojob-debug-mise were split out of the old
+# algojob_microservice_python monorepo (see git history there) into their
 # own repos; those only have `main`, not `local-run`.
 SERVICES=(
-  "algojob_agent_server|algojob-agent-server|local-run"
-  "algojobs_service|algojobs_service|local-run"
-  "algojob_nest|algojob_nest|local-run"
-  "algojobs_frontend|algojobs_frontend|local-run"
-  "apex_mircoservice|algoapex-microservice|local-run"
-  "workload-proctoring|algojob-proctoring-mise|main"
-  "workload-personalized-learning|Algojob-debug-mise|main"
+  "algojob-agent-server|local-run"
+  "algojobs_service|local-run"
+  "algojob_nest|local-run"
+  "algojobs_frontend|local-run"
+  "algoapex-microservice|local-run"
+  "algojob-proctoring-mise|main"
+  "Algojob-debug-mise|main"
 )
 
 if [ "${1:-}" = "--list" ]; then
-  printf "%-30s %-32s %s\n" "FOLDER (required)" "REPO" "BRANCH"
+  printf "%-30s %s\n" "REPO (= folder)" "BRANCH"
   for e in "${SERVICES[@]}"; do
-    IFS='|' read -r folder repo branch <<<"$e"
-    printf "%-30s %-32s %s\n" "$folder" "$repo" "$branch"
+    IFS='|' read -r repo branch <<<"$e"
+    printf "%-30s %s\n" "$repo" "$branch"
   done
   exit 0
 fi
@@ -47,8 +41,9 @@ echo
 
 failed=()
 for entry in "${SERVICES[@]}"; do
-  IFS='|' read -r folder repo default_branch <<<"$entry"
+  IFS='|' read -r repo default_branch <<<"$entry"
   branch="${BRANCH_OVERRIDE:-$default_branch}"
+  folder="$repo"
   url="$ORG/$repo.git"
 
   if [ -d "$folder/.git" ]; then

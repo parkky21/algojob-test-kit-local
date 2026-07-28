@@ -19,11 +19,11 @@ reproducible without disturbing any of that.
 ```bash
 ./clone.sh               # clones all seven service repos, each on its own default branch
 ./clone.sh local-run      # override the branch for every repo that has one
-./clone.sh --list         # see the folder <-> GitHub-repo <-> branch mapping
+./clone.sh --list         # see the repo (= folder) <-> branch mapping
 ```
 
 Five repos default to `local-run` (where this stack's fixes currently live); the two newest —
-`workload-proctoring` and `workload-personalized-learning`, split out of the old
+`algojob-proctoring-mise` and `Algojob-debug-mise`, split out of the old
 `algojob_microservice_python` monorepo — only have `main`.
 
 Re-running `./clone.sh` later `git fetch`es rather than overwriting — it never touches whatever
@@ -40,13 +40,13 @@ shows the full shape):
 
 ```
 ./.env                                                        (this repo — LiveKit + public URLs)
-algojob_agent_server/.env
+algojob-agent-server/.env
 algojobs_service/.env
 algojob_nest/.env
 algojobs_frontend/.env
-apex_mircoservice/.env
-workload-personalized-learning/.env
-workload-proctoring/.env
+algoapex-microservice/.env
+Algojob-debug-mise/.env
+algojob-proctoring-mise/.env
 ```
 
 ```bash

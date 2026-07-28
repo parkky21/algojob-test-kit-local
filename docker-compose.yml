@@ -19,9 +19,9 @@
 # See docker-compose.host.yml for the Linux deploy overlay that switches to host
 # networking — worth it for LiveKit's WebRTC media path (see the livekit notes).
 #
-# NOT INCLUDED: workload-proctoring. Its mediapipe dependency ships no Linux
+# NOT INCLUDED: algojob-proctoring-mise. Its mediapipe dependency ships no Linux
 # ARM64 wheel. Run it natively alongside
-# (cd workload-proctoring && ./run.sh), or see the
+# (cd algojob-proctoring-mise && ./run.sh), or see the
 # Dockerfile note to build it in — which makes the image x86_64-only.
 
 x-app: &app
@@ -60,7 +60,7 @@ services:
       KC_HOSTNAME_STRICT: 'false'
       KC_HOSTNAME_STRICT_HTTPS: 'false'
     # Internally 8080 (nest reaches it at http://keycloak:8080); published on
-    # 8180 because workload-proctoring owns 8080 when run natively.
+    # 8180 because algojob-proctoring-mise owns 8080 when run natively.
     ports:
       - '8180:8080'
     volumes:
@@ -144,7 +144,7 @@ services:
       LIVEKIT_API_KEY: ${LIVEKIT_API_KEY:-}
       LIVEKIT_API_SECRET: ${LIVEKIT_API_SECRET:-}
       REDIS_URL: redis://redis:6379/0
-      # workload-proctoring isn't in this stack; the value must be non-empty
+      # algojob-proctoring-mise isn't in this stack; the value must be non-empty
       # (configs.py fails fast at import if it is) but nothing will answer it.
       PROCTOR_API_URL: ws://proctoring:8080/ws/proctor
     extra_hosts:
@@ -160,7 +160,7 @@ services:
     container_name: algojob-apex
     working_dir: /app/apex
     command: /app/apex/.venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8001
-    env_file: ./apex_mircoservice/.env
+    env_file: ./algoapex-microservice/.env
     environment:
       LOG_LEVEL: INFO
       # apex's .env sets ENABLE_CRON_JOB=false; kept explicit because the daily
@@ -190,7 +190,7 @@ services:
     container_name: algojob-personalized
     working_dir: /app/personalized
     command: /app/personalized/.venv/bin/uvicorn main:app --host 0.0.0.0 --port 8070
-    env_file: ./workload-personalized-learning/.env
+    env_file: ./Algojob-debug-mise/.env
     environment:
       LOG_LEVEL: INFO
       # Explicit because this service DEFAULTS this to true when unset, unlike
@@ -274,7 +274,7 @@ services:
     working_dir: /app/agent_server
     # Outbound LiveKit worker — binds no port.
     command: /app/agent_server/.venv/bin/python main.py start
-    env_file: ./algojob_agent_server/.env
+    env_file: ./algojob-agent-server/.env
     environment:
       LOG_LEVEL: INFO
       # See the note on algojobs-service: LiveKit config is hoisted to the
