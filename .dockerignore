@@ -1,0 +1,29 @@
+# Build artifacts and deps are rebuilt inside the image — never ship them in
+# the build context (they total ~5GB and would make every build crawl).
+**/.venv
+**/node_modules
+**/.next
+**/dist
+**/build
+
+# Secrets: .env files are mounted at runtime by docker-compose, never baked
+# into the image.
+**/.env
+**/.env.*
+
+# VCS / caches / editor cruft
+**/.git
+**/.gitignore
+**/__pycache__
+**/*.pyc
+**/.pytest_cache
+**/.ruff_cache
+**/.mypy_cache
+**/.DS_Store
+**/.claude
+**/*.log
+logs/
+
+# Not part of the 7 deployed services
+analysis/
+staging/

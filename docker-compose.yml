@@ -1,0 +1,295 @@
+# AlgoJob — one container per service, all from a single shared image.
+#
+#   docker compose build          # builds algojob-stack:latest once
+#   docker compose up -d
+#   docker compose logs -f nest   # per-service logs
+#   docker compose restart apex   # per-service restart
+#
+# The Dockerfile produces ONE image containing every service under /app/<svc>.
+# Each service below runs a different process from that same image, so there's
+# a single build but proper per-container isolation, logs, health and restarts.
+# (This is the pattern apex's own compose already used for its SQS workers.)
+#
+# Networking: plain bridge + service-name DNS, which works identically on Linux
+# and macOS. Services reach each other by service name (nest -> apex:8001), not
+# localhost, so the cross-service URLs are overridden per service below. Real
+# env vars take precedence over the mounted .env files in all three runtimes
+# (@nestjs/config, @next/env, python-dotenv), so these overrides win cleanly.
+#
+# See docker-compose.host.yml for the Linux deploy overlay that switches to host
+# networking — worth it for LiveKit's WebRTC media path (see the livekit notes).
+#
+# NOT INCLUDED: workload-proctoring. Its mediapipe dependency ships no Linux
+# ARM64 wheel. Run it natively alongside
+# (cd algojob_microservice_python/workload-proctoring && ./run.sh), or see the
+# Dockerfile note to build it in — which makes the image x86_64-only.
+
+x-app: &app
+  build:
+    context: .
+    dockerfile: Dockerfile
+  image: algojob-stack:latest
+  restart: unless-stopped
+
+services:
+  # ---------------------------------------------------------------- infra ---
+  redis:
+    image: redis:7-alpine
+    container_name: algojob-redis
+    restart: unless-stopped
+    ports:
+      - '6379:6379'
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.0.7
+    container_name: algojob-keycloak
+    restart: unless-stopped
+    command: start-dev
+    environment:
+      KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN:-admin}
+      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin}
+      KC_HTTP_ENABLED: 'true'
+      KC_HOSTNAME_STRICT: 'false'
+      KC_HOSTNAME_STRICT_HTTPS: 'false'
+    # Internally 8080 (nest reaches it at http://keycloak:8080); published on
+    # 8180 because workload-proctoring owns 8080 when run natively.
+    ports:
+      - '8180:8080'
+    volumes:
+      - keycloak_data:/opt/keycloak/data
+    healthcheck:
+      test:
+        [
+          'CMD-SHELL',
+          'exec 3<>/dev/tcp/127.0.0.1/8080 && printf "GET /realms/master HTTP/1.0\r\nHost: localhost\r\n\r\n" >&3 && head -1 <&3 | grep -q "200"',
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 90s
+
+  elasticmq:
+    image: softwaremill/elasticmq-native:latest
+    container_name: algojob-elasticmq
+    restart: unless-stopped
+    volumes:
+      - ./infra/elasticmq.conf:/opt/elasticmq.conf:ro
+    ports:
+      - '9324:9324'
+      - '9325:9325'
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- --post-data='{}' --header='X-Amz-Target: AmazonSQS.ListQueues' --header='Content-Type: application/x-amz-json-1.0' http://localhost:9324/ || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  # ------------------------------------------------------------- services ---
+  # LiveKit runs NATIVELY on the host, not here — start it with ./start.sh
+  # (or livekit-local/run-livekit.sh). This service is kept only for the Linux
+  # host-networking overlay and is NOT started by default.
+  #
+  # Why native: under bridge networking LiveKit must advertise a single ICE
+  # candidate address, and no value works for both consumers at once —
+  # the container IP is unreachable from the browser (browser->LiveKit audio
+  # never connects, so interviews record an empty transcript with no error),
+  # while 127.0.0.1 means "itself" to the agent container. Bound to the host,
+  # LiveKit advertises one LAN address that the browser AND the containers can
+  # both reach.
+  #
+  # Enable this container deliberately with:
+  #   docker compose --profile docker-livekit up -d
+  # It is appropriate on Linux together with docker-compose.host.yml, where
+  # host networking makes ICE a non-issue.
+  livekit:
+    <<: *app
+    profiles: ['docker-livekit']
+    container_name: algojob-livekit
+    working_dir: /app/livekit
+    # --redis-host overrides the yaml's `localhost:6379` without needing a
+    # second config file.
+    command: >
+      livekit-server --config /app/livekit/livekit.yaml
+      --redis-host redis:6379
+    depends_on:
+      redis:
+        condition: service_healthy
+    ports:
+      - '7880:7880'
+      - '7881:7881'
+      - '7882:7882/udp'
+
+  algojobs-service:
+    <<: *app
+    container_name: algojob-algojobs-service
+    working_dir: /app/algojobs_service
+    command: /app/algojobs_service/.venv/bin/uvicorn main:app --host 0.0.0.0 --port 8000
+    env_file: ./algojobs_service/.env
+    environment:
+      LOG_LEVEL: INFO
+      # LiveKit config comes from the repo-root .env so Cloud vs local-native is
+      # a single switch. These override this service's own .env on purpose —
+      # the URL and the key/secret must agree (the key signs the tokens the URL
+      # validates), and keeping three .env files in sync by hand is how they
+      # drift. Default is the local native server.
+      LIVEKIT_URL: ${LIVEKIT_URL:-ws://${LIVEKIT_HOST:-host.docker.internal}:7880}
+      LIVEKIT_API_KEY: ${LIVEKIT_API_KEY:-}
+      LIVEKIT_API_SECRET: ${LIVEKIT_API_SECRET:-}
+      REDIS_URL: redis://redis:6379/0
+      # workload-proctoring isn't in this stack; the value must be non-empty
+      # (configs.py fails fast at import if it is) but nothing will answer it.
+      PROCTOR_API_URL: ws://proctoring:8080/ws/proctor
+    extra_hosts:
+      - 'host.docker.internal:host-gateway'
+    depends_on:
+      redis:
+        condition: service_healthy
+    ports:
+      - '8000:8000'
+
+  apex:
+    <<: *app
+    container_name: algojob-apex
+    working_dir: /app/apex
+    command: /app/apex/.venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8001
+    env_file: ./apex_mircoservice/.env
+    environment:
+      LOG_LEVEL: INFO
+      # apex's .env sets ENABLE_CRON_JOB=false; kept explicit because the daily
+      # full pass fires paid LLM question generation.
+      ENABLE_CRON_JOB: 'false'
+      # This process also hosts the SQS consumers, so no separate worker
+      # containers are needed.
+      RUN_CONSUMERS: 'true'
+      SQS_ENDPOINT_URL: http://elasticmq:9324
+      # NOTE: AWS_ACCESS_KEY_ID/SECRET are deliberately NOT overridden here.
+      # They are shared with real S3 (audio uploads), so dummy values break
+      # S3 with "The AWS Access Key Id you provided does not exist".
+      # ElasticMQ does not validate signatures, so the real credentials from
+      # .env work fine against it.
+      SQS_USER_SIGNUP_URL: http://elasticmq:9324/000000000000/algoapex-user-signup.fifo
+      SQS_TEST_COMPLETED_URL: http://elasticmq:9324/000000000000/algoapex-test-completed.fifo
+      SQS_EVALUATION_COMPLETED_URL: http://elasticmq:9324/000000000000/algoapex-evaluation-completed.fifo
+      SQS_QUESTION_GENERATION_CRON_URL: http://elasticmq:9324/000000000000/algoapex-question-generation-cron.fifo
+    depends_on:
+      elasticmq:
+        condition: service_healthy
+    ports:
+      - '8001:8001'
+
+  personalized:
+    <<: *app
+    container_name: algojob-personalized
+    working_dir: /app/personalized
+    command: /app/personalized/.venv/bin/uvicorn main:app --host 0.0.0.0 --port 8070
+    env_file: ./algojob_microservice_python/workload-personalized-learning/.env
+    environment:
+      LOG_LEVEL: INFO
+      # Explicit because this service DEFAULTS this to true when unset, unlike
+      # apex — the two genuinely disagree.
+      ENABLE_CRON_JOB: 'true'
+    ports:
+      - '8070:8070'
+
+  nest:
+    <<: *app
+    container_name: algojob-nest
+    working_dir: /app/nest
+    command: node dist/main
+    env_file: ./algojob_nest/.env
+    environment:
+      # NEST_PORT, not PORT: nest prefers it, and PORT is also read by Next.js.
+      NEST_PORT: '5001'
+      # nest's validateConfig refuses to boot in production while .env still has
+      # placeholder secrets ("change-me-in-production"). That guard is
+      # intentional — a real deploy must set real secrets and use production.
+      NODE_ENV: ${NEST_NODE_ENV:-development}
+      TLS_CA_FILE: /app/global-bundle.pem
+      REDIS_HOST: redis
+      REDIS_PORT: '6379'
+      REDIS_PASSWORD: ''
+      KEYCLOAK_URL: http://keycloak:8080
+      PYTHON_SERVICE_URL: http://algojobs-service:8000/api/v1
+      PYTHON_PERSONALIZED_SERVICE: http://personalized:8070
+      ALGOAPEX_API_URL: http://apex:8001/v1
+      SQS_ENDPOINT_URL: http://elasticmq:9324
+      # NOTE: AWS_ACCESS_KEY_ID/SECRET are deliberately NOT overridden here.
+      # They are shared with real S3 (audio uploads), so dummy values break
+      # S3 with "The AWS Access Key Id you provided does not exist".
+      # ElasticMQ does not validate signatures, so the real credentials from
+      # .env work fine against it.
+      SQS_USER_SIGNUP_URL: http://elasticmq:9324/000000000000/algoapex-user-signup.fifo
+      SQS_TEST_COMPLETED_URL: http://elasticmq:9324/000000000000/algoapex-test-completed.fifo
+      SQS_EVALUATION_COMPLETED_URL: http://elasticmq:9324/000000000000/algoapex-evaluation-completed.fifo
+    depends_on:
+      redis:
+        condition: service_healthy
+      keycloak:
+        condition: service_healthy
+      elasticmq:
+        condition: service_healthy
+    ports:
+      - '5001:5001'
+
+  frontend:
+    <<: *app
+    container_name: algojob-frontend
+    working_dir: /app/frontend
+    command: /usr/local/bin/frontend-entry.sh
+    env_file: ./algojobs_frontend/.env
+    environment:
+      NODE_ENV: production
+      PORT: '3000'
+      HOSTNAME: '0.0.0.0'
+      # Server-side, resolved INSIDE this container -> service name.
+      BACKEND_API_URL: http://nest:5001
+      INTERNAL_API_BASE: http://nest:5001
+      # Browser-resolved, baked into the JS served to the client -> must be
+      # reachable from the user's machine. Set these to the public hostname on
+      # a real deploy.
+      API_BASE_URL: ${PUBLIC_API_BASE_URL:-http://localhost:5001}
+      LIVEKIT_URL: ${PUBLIC_LIVEKIT_URL:-ws://localhost:7880}
+      LIVEKIT_DEBUG: ${PUBLIC_LIVEKIT_DEBUG:-false}
+      # The frontend has no token-minting route (it delegates to the backend),
+      # so these are not strictly required — set only to stop its own .env from
+      # leaving stale devkey values behind when the root .env points at Cloud.
+      LIVEKIT_API_KEY: ${LIVEKIT_API_KEY:-}
+      LIVEKIT_API_SECRET: ${LIVEKIT_API_SECRET:-}
+    depends_on:
+      - nest
+    ports:
+      - '3000:3000'
+
+  agent-server:
+    <<: *app
+    container_name: algojob-agent-server
+    working_dir: /app/agent_server
+    # Outbound LiveKit worker — binds no port.
+    command: /app/agent_server/.venv/bin/python main.py start
+    env_file: ./algojob_agent_server/.env
+    environment:
+      LOG_LEVEL: INFO
+      # See the note on algojobs-service: LiveKit config is hoisted to the
+      # repo-root .env so Cloud vs local-native is one switch.
+      LIVEKIT_URL: ${LIVEKIT_URL:-ws://${LIVEKIT_HOST:-host.docker.internal}:7880}
+      LIVEKIT_API_KEY: ${LIVEKIT_API_KEY:-}
+      LIVEKIT_API_SECRET: ${LIVEKIT_API_SECRET:-}
+      PROCTOR_API_URL: ws://proctoring:8080/ws/proctor
+      DOCDB_CA_BUNDLE: /app/global-bundle.pem
+      XDG_CACHE_HOME: /app/agent_server/.cache
+    extra_hosts:
+      - 'host.docker.internal:host-gateway'
+
+volumes:
+  redis_data:
+    driver: local
+  keycloak_data:
+    driver: local
