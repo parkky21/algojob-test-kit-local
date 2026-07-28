@@ -20,10 +20,10 @@ LOG_DIR="$ROOT_DIR/logs"
 # Run a single service by hand the exact same way: cd <dir> && ./<script>.
 SERVICES=(
   "livekit      |livekit-local                                              |./run-livekit.sh"
-  "proctoring   |algojob_microservice_python/workload-proctoring            |./run.sh"
+  "proctoring   |workload-proctoring                                        |./run.sh"
   "algojobsvc   |algojobs_service                                           |./run.sh"
   "apex         |apex_mircoservice                                          |./run.sh"
-  "personalized |algojob_microservice_python/workload-personalized-learning |./run.sh"
+  "personalized |workload-personalized-learning                             |./run.sh"
   "nest         |algojob_nest                                               |./run.sh"
   "frontend     |algojobs_frontend                                          |./run.sh"
   "agent        |algojob_agent_server                                       |./run-agent.sh"

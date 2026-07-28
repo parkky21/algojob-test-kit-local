@@ -1,7 +1,7 @@
 # AlgoJob dev stack
 
 This repo is **orchestration only** — `Dockerfile`, `docker-compose.yml`, `dev.sh`/`start.sh`, and
-docs. It does not contain any AlgoJob service code. The six services each live in their own repo
+docs. It does not contain any AlgoJob service code. The seven services each live in their own repo
 and are pulled in by `./clone.sh`.
 
 Full detail on running everything, deploying, and how each piece fits together is in
@@ -9,7 +9,7 @@ Full detail on running everything, deploying, and how each piece fits together i
 
 ## Why a separate repo
 
-The six service repos carry 130+ active branches and their own CI pipelines — merging them into
+The service repos carry 130+ active branches and their own CI pipelines — merging them into
 one repo would mean migrating every open branch/PR and rewriting every pipeline. This repo exists
 instead so the orchestration layer (which previously lived nowhere, versioned by no one) is
 reproducible without disturbing any of that.
@@ -17,17 +17,21 @@ reproducible without disturbing any of that.
 ## Get the code
 
 ```bash
-./clone.sh              # clones all six service repos, branch `local-run`
-./clone.sh main          # or any other branch
-./clone.sh --list        # see the folder <-> GitHub-repo mapping
+./clone.sh               # clones all seven service repos, each on its own default branch
+./clone.sh local-run      # override the branch for every repo that has one
+./clone.sh --list         # see the folder <-> GitHub-repo <-> branch mapping
 ```
+
+Five repos default to `local-run` (where this stack's fixes currently live); the two newest —
+`workload-proctoring` and `workload-personalized-learning`, split out of the old
+`algojob_microservice_python` monorepo — only have `main`.
 
 Re-running `./clone.sh` later `git fetch`es rather than overwriting — it never touches whatever
 branch you currently have checked out in each service folder.
 
 ## Get the secrets
 
-**No `.env` file is in this git repo, or any of the six service repos.** Every one of them holds
+**No `.env` file is in this git repo, or any of the service repos.** Every one of them holds
 live credentials (MongoDB Atlas, Neon Postgres, AWS, LiveKit, Razorpay, WhatsApp, Google OAuth,
 Cloudinary...) — get them from the team's secret store, not from git history.
 
@@ -41,8 +45,8 @@ algojobs_service/.env
 algojob_nest/.env
 algojobs_frontend/.env
 apex_mircoservice/.env
-algojob_microservice_python/workload-personalized-learning/.env
-algojob_microservice_python/workload-proctoring/.env
+workload-personalized-learning/.env
+workload-proctoring/.env
 ```
 
 ```bash
@@ -70,6 +74,6 @@ infra/                           — elasticmq.conf (local SQS emulator queue de
 livekit-local/                   — livekit.yaml + run-livekit.sh (native LiveKit)
 dev.sh                           — all-native local dev (no Docker) for macOS
 start.sh                         — docker compose up + native LiveKit, one command
-clone.sh                         — bootstraps the six service repos
+clone.sh                         — bootstraps the seven service repos
 RUNBOOK.md                       — full documentation
 ```

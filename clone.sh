@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# Clones (or updates) the six AlgoJob service repos into this directory.
+# Clones (or updates) the seven AlgoJob service repos into this directory.
 #
-#   ./clone.sh                 clone/update all six on the default branch
-#   ./clone.sh main            use a different branch
-#   ./clone.sh --list          show the repo -> folder mapping and exit
+#   ./clone.sh                 clone/update all seven, each on its default branch
+#   ./clone.sh local-run       override the branch for every repo that has one
+#   ./clone.sh --list          show the folder -> repo -> branch mapping and exit
 #
 # IMPORTANT: the folder names are not cosmetic. The Dockerfile's build context
 # is this directory and it COPYs each service by exact path, and
@@ -17,34 +17,38 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$ROOT_DIR"
 
 ORG="https://github.com/algorootprod"
-DEFAULT_BRANCH="local-run"
 
-# folder|repo
+# folder|repo|default-branch
+# workload-proctoring and workload-personalized-learning were split out of the
+# old algojob_microservice_python monorepo (see git history there) into their
+# own repos; those only have `main`, not `local-run`.
 SERVICES=(
-  "algojob_agent_server|algojob-agent-server"
-  "algojobs_service|algojobs_service"
-  "algojob_nest|algojob_nest"
-  "algojobs_frontend|algojobs_frontend"
-  "apex_mircoservice|algoapex-microservice"
-  "algojob_microservice_python|algojob_microservice_python"
+  "algojob_agent_server|algojob-agent-server|local-run"
+  "algojobs_service|algojobs_service|local-run"
+  "algojob_nest|algojob_nest|local-run"
+  "algojobs_frontend|algojobs_frontend|local-run"
+  "apex_mircoservice|algoapex-microservice|local-run"
+  "workload-proctoring|algojob-proctoring-mise|main"
+  "workload-personalized-learning|Algojob-debug-mise|main"
 )
 
 if [ "${1:-}" = "--list" ]; then
-  printf "%-30s %s\n" "FOLDER (required)" "REPO"
+  printf "%-30s %-32s %s\n" "FOLDER (required)" "REPO" "BRANCH"
   for e in "${SERVICES[@]}"; do
-    printf "%-30s %s/%s.git\n" "${e%%|*}" "$ORG" "${e##*|}"
+    IFS='|' read -r folder repo branch <<<"$e"
+    printf "%-30s %-32s %s\n" "$folder" "$repo" "$branch"
   done
   exit 0
 fi
 
-BRANCH="${1:-$DEFAULT_BRANCH}"
-echo "Branch: $BRANCH"
+BRANCH_OVERRIDE="${1:-}"
+echo "${BRANCH_OVERRIDE:+Branch override: $BRANCH_OVERRIDE (applied to every repo)}"
 echo
 
 failed=()
 for entry in "${SERVICES[@]}"; do
-  folder="${entry%%|*}"
-  repo="${entry##*|}"
+  IFS='|' read -r folder repo default_branch <<<"$entry"
+  branch="${BRANCH_OVERRIDE:-$default_branch}"
   url="$ORG/$repo.git"
 
   if [ -d "$folder/.git" ]; then
@@ -57,8 +61,12 @@ for entry in "${SERVICES[@]}"; do
     fi
     printf "   on branch: %s\n" "$(git -C "$folder" branch --show-current 2>/dev/null)"
   else
-    echo "→ $folder — cloning $repo"
-    if ! git clone --branch "$BRANCH" "$url" "$folder" 2>&1 | sed 's/^/   /'; then
+    echo "→ $folder — cloning $repo ($branch)"
+    # NOTE: `cmd | sed ...; if [ $? ...` — not `if ! cmd | sed`, which would
+    # check sed's exit status (always 0) instead of git clone's.
+    git clone --branch "$branch" "$url" "$folder" 2>&1 | sed 's/^/   /'
+    clone_status="${PIPESTATUS[0]}"
+    if [ "$clone_status" -ne 0 ]; then
       failed+=("$folder (clone failed)")
     fi
   fi
@@ -72,7 +80,7 @@ if [ ${#failed[@]} -gt 0 ]; then
   exit 1
 fi
 
-echo "All six services present."
+echo "All seven services present."
 echo
 echo "Next:"
 echo "  1. cp .env.example .env          # then edit if your LAN IP differs"

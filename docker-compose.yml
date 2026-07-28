@@ -21,7 +21,7 @@
 #
 # NOT INCLUDED: workload-proctoring. Its mediapipe dependency ships no Linux
 # ARM64 wheel. Run it natively alongside
-# (cd algojob_microservice_python/workload-proctoring && ./run.sh), or see the
+# (cd workload-proctoring && ./run.sh), or see the
 # Dockerfile note to build it in — which makes the image x86_64-only.
 
 x-app: &app
@@ -190,7 +190,7 @@ services:
     container_name: algojob-personalized
     working_dir: /app/personalized
     command: /app/personalized/.venv/bin/uvicorn main:app --host 0.0.0.0 --port 8070
-    env_file: ./algojob_microservice_python/workload-personalized-learning/.env
+    env_file: ./workload-personalized-learning/.env
     environment:
       LOG_LEVEL: INFO
       # Explicit because this service DEFAULTS this to true when unset, unlike

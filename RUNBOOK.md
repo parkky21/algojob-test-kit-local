@@ -91,7 +91,7 @@ cd apex_mircoservice && ./run.sh
 
 ### workload-personalized-learning — content generation (FastAPI)
 ```bash
-cd algojob_microservice_python/workload-personalized-learning && ./run.sh
+cd workload-personalized-learning && ./run.sh
 ```
 - Port: **8070**
 - Requires: nothing local — only cloud Mongo
@@ -99,7 +99,7 @@ cd algojob_microservice_python/workload-personalized-learning && ./run.sh
 
 ### workload-proctoring — AI exam proctoring (FastAPI + YOLO/MediaPipe)
 ```bash
-cd algojob_microservice_python/workload-proctoring && ./run.sh
+cd workload-proctoring && ./run.sh
 ```
 - Port: **8080**
 - Requires: nothing local — only cloud Mongo (`.env`'s `MONGODB_URI` was repointed at the shared
@@ -390,7 +390,7 @@ Proctoring is opt-in per interview (the `proctoring_enabled` job-metadata flag),
 interviews are unaffected — but proctored ones will fail to connect.
 
 **To run proctoring**, either start it natively alongside the container
-(`cd algojob_microservice_python/workload-proctoring && ./run.sh`), or add it back to the image —
+(`cd workload-proctoring && ./run.sh`), or add it back to the image —
 restore its dependency/source layers and runtime `COPY` in the `Dockerfile`, re-add its
 `supervisord.conf` program, and pin `platform: linux/amd64` in `docker-compose.yml`. That last step
 makes the image **x86_64-only**.

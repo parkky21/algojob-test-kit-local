@@ -83,8 +83,8 @@ RUN cd algojobs_service && uv sync --frozen --no-install-project --no-dev
 COPY apex_mircoservice/pyproject.toml apex_mircoservice/uv.lock apex/
 RUN cd apex && uv sync --frozen --no-install-project --no-dev
 
-COPY algojob_microservice_python/workload-personalized-learning/pyproject.toml \
-     algojob_microservice_python/workload-personalized-learning/uv.lock personalized/
+COPY workload-personalized-learning/pyproject.toml \
+     workload-personalized-learning/uv.lock personalized/
 RUN cd personalized && uv sync --frozen --no-install-project --no-dev
 
 # NOTE: workload-proctoring is intentionally NOT included. It depends on
@@ -104,7 +104,7 @@ RUN cd algojobs_service && uv sync --frozen --no-dev
 COPY apex_mircoservice/ apex/
 RUN cd apex && uv sync --frozen --no-dev
 
-COPY algojob_microservice_python/workload-personalized-learning/ personalized/
+COPY workload-personalized-learning/ personalized/
 RUN cd personalized && uv sync --frozen --no-dev
 
 # Pre-download the agent's Silero VAD + turn-detector models. main.py loads VAD
