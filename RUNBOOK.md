@@ -211,7 +211,7 @@ different process from it. One build, proper per-service isolation.
 
 ```bash
 ./start.sh --build        # build algojob-stack:latest (all 6 app services — see below)
-./start.sh                # containers (per services.conf) + native livekit-server (foreground)
+./start.sh                # containers + native livekit-server (foreground)
 ./start.sh --no-livekit   # containers only
 ./start.sh --down         # stop containers
 ```
@@ -232,14 +232,24 @@ docker compose ps
 `nest`, `frontend`, `agent-server`) each carry a `profiles:` entry matching their own
 name — the same mechanism `livekit` already used for its own opt-in. That means the bare
 `docker compose build` / `docker compose up -d` shown just above only touch infra by
-default; **`./start.sh` is what actually passes the right `--profile` flags**, reading
-them from `services.conf` (run `./configure.sh` for an interactive picker, or copy
-`services.conf.example` and edit it — everything is on by default, so existing habits
-of running `docker compose` directly with no service list keep working as long as you
-go through `./start.sh`). All 6 repos are still cloned and built into the one shared
-image regardless of selection — only `algojob-proctoring-mise` (native-only) is
-actually skippable at clone time. `frontend` depends on `nest` at the Compose level, so
-enabling `frontend` always pulls `nest` in too.
+default; **`./start.sh` is what actually passes the right `--profile` flags**, driven by
+env vars (`START_APEX`, `START_NEST`, `START_FRONTEND`, `START_ALGOJOBS_SERVICE`,
+`START_PERSONALIZED`, `START_AGENT_SERVER`, each defaulting to `1` if unset — nothing is
+read from a file, so plain `./start.sh` still starts everything). Run `./configure.sh`
+for an interactive picker (fully ephemeral — it asks fresh each time, exports the
+answers as env vars, then optionally runs `clone.sh`/`start.sh` for you in the same
+invocation), or export the vars yourself for a one-off:
+`START_APEX=0 START_PERSONALIZED=0 ./start.sh`.
+
+`clone.sh` has the same shape for which repos to clone (`CLONE_AGENT_SERVER`,
+`CLONE_ALGOJOBS_SERVICE`, `CLONE_NEST`, `CLONE_FRONTEND`, `CLONE_APEX`,
+`CLONE_PERSONALIZED`, `CLONE_PROCTORING`). **Six of the seven repos are built into the
+one shared image**, so declining to clone any of those breaks `docker compose build`
+outright — even for repos you didn't decline (`clone.sh --list` marks which are
+required; `configure.sh` warns inline if you decline one). Only
+`algojob-proctoring-mise` (native-only) is genuinely safe to skip. `frontend` depends on
+`nest` at the Compose level, so enabling `frontend` always pulls `nest` in too
+(`configure.sh`/`start.sh` enforce this automatically).
 
 ### Switching LiveKit: Cloud vs local native
 
@@ -315,10 +325,9 @@ docker compose --profile docker-livekit --profile algojobs-service --profile ape
 
 The extra `--profile` flags are needed because the 6 app services are now also
 profile-gated (see "Selective services" above) — `--profile docker-livekit` alone would
-start LiveKit but nothing else app-level. `./start.sh` handles this for you (it doesn't
-manage `docker-livekit` itself, so still pass that flag by hand on Linux, or add
-`--profile docker-livekit` — `./start.sh` only reads `services.conf` for the 6 app
-services).
+start LiveKit but nothing else app-level. `./start.sh` handles the 6 app profiles for
+you via `START_*` env vars, but doesn't manage `docker-livekit` itself, so still pass
+that flag by hand on Linux.
 
 Note that `docker compose down` **skips profiled services**, so a stray `livekit` (or
 disabled app) container can keep holding its port. Use `docker compose --profile
@@ -394,10 +403,10 @@ export PUBLIC_S3_ENDPOINT_URL=https://algojob.example.com:9000
 docker compose --profile algojobs-service --profile apex --profile personalized \
   --profile nest --profile frontend --profile agent-server \
   up -d --build     # first build takes a while (~5-6GB image)
-# Equivalently: ./start.sh --build && ./start.sh --no-livekit (reads services.conf —
-# make sure it enables everything you want running on this server; see "Selective
-# services" above). Bare `docker compose up -d --build` with no --profile flags now
-# only starts infra, since the 6 app services are profile-gated.
+# Equivalently: ./start.sh --build && ./start.sh --no-livekit (everything is on by
+# default — set START_* env vars first if you want a subset on this server; see
+# "Selective services" above). Bare `docker compose up -d --build` with no --profile
+# flags now only starts infra, since the 6 app services are profile-gated.
 docker compose logs -f algojob
 
 **Verify, in this order:**

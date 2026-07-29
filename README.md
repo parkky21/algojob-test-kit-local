@@ -21,17 +21,18 @@ Algojob-debug-mise/.env
 algojob-proctoring-mise/.env
 ```
 
-Optional: run `./configure.sh` to interactively pick which app services you actually
-want running (e.g. just `frontend` + `nest` while working on the backend). It writes
-`services.conf`, which `clone.sh` and `start.sh` both read. Skip this and everything
-clones/starts by default — see [Selective services](#selective-services) below.
+Optional: run `./configure.sh` instead of `./clone.sh` — it interactively asks, repo by
+repo, whether to clone it, then service by service, whether `./start.sh` should launch
+it, then offers to run `./clone.sh` / `./start.sh --build` / `./start.sh` for you with
+those choices. It's fully ephemeral: nothing is written to disk, so it asks again every
+time you run it. See [Selective services](#selective-services) below.
 
 ## Build + run (full stack)
 
 ```bash
-./start.sh --build         # build the shared image (see docker-compose.yml comment: this
-                            # always builds all 6 app services, regardless of services.conf)
-./start.sh                 # containers (per services.conf) + native LiveKit (Ctrl-C stops LiveKit only)
+./start.sh --build         # build the shared image (always builds all 6 app services —
+                            # see "Selective services" below for why)
+./start.sh                 # containers + native LiveKit (Ctrl-C stops LiveKit only)
 ./start.sh --no-livekit    # containers only
 ./start.sh --down          # stop containers
 ```
@@ -44,19 +45,25 @@ matching their name — same mechanism already used for `livekit`. Bare `docker 
 up -d` / `docker compose build` therefore only touch infra (`redis`/`keycloak`/
 `elasticmq`/`minio`) by default; nothing app-level starts or builds without a profile.
 
-`./start.sh` and `./start.sh --build` read `services.conf` and pass the right
-`--profile` flags for you — that's the supported way to run a subset. Generate/edit it
-with `./configure.sh`, or copy `services.conf.example` (defaults to everything on) and
-edit by hand. It's gitignored — a per-machine preference, like `.env`.
+`./start.sh` and `./start.sh --build` pass the right `--profile` flags for you, driven
+by env vars (`START_APEX`, `START_NEST`, `START_FRONTEND`, `START_ALGOJOBS_SERVICE`,
+`START_PERSONALIZED`, `START_AGENT_SERVER` — each defaults to `1`/on if unset). Use
+`./configure.sh` for an interactive picker, or export them yourself for a one-off:
+`START_APEX=0 START_PERSONALIZED=0 ./start.sh`. Nothing persists to disk — every
+invocation without an explicit override starts everything.
 
 Note: `frontend` depends on `nest` at the Compose level, so enabling `frontend` always
 enables `nest` too (`configure.sh`/`start.sh` do this automatically; disabling `nest`
 while leaving `frontend` on isn't a valid combination — Compose would refuse to start).
 
-All 6 repos are still cloned and built into the one shared image regardless of this
-selection — see the note in `services.conf.example`. Only `algojob-proctoring-mise`
-(native-only, already excluded from the Docker build for arch reasons) is actually
-skippable at clone time, via `CLONE_PROCTORING` in the same file.
+`clone.sh` works the same way for which repos to clone, via `CLONE_AGENT_SERVER`,
+`CLONE_ALGOJOBS_SERVICE`, `CLONE_NEST`, `CLONE_FRONTEND`, `CLONE_APEX`,
+`CLONE_PERSONALIZED`, `CLONE_PROCTORING`. **Six of the seven repos are built into the one
+shared Docker image**, so declining to clone any of those breaks `docker compose build`
+outright, even for repos you didn't decline (`clone.sh --list` marks which ones are
+required; `configure.sh` warns inline if you decline one). Only
+`algojob-proctoring-mise` (native-only, already excluded from the Docker build for arch
+reasons) is genuinely safe to skip.
 
 ## Build + run a single service only
 
@@ -68,8 +75,10 @@ docker compose up -d <service>
 `<service>`: `frontend` `nest` `apex` `personalized` `agent-server` `algojobs-service` `elasticmq` `redis` `keycloak` `minio`
 
 Only rebuilds/recreates that one container — the rest of the stack keeps running.
-Naming a service explicitly here bypasses profile filtering, so this works regardless
-of what's in `services.conf`.
+Naming a service explicitly here bypasses profile filtering, so this always works
+regardless of `START_*` env vars (`frontend` still needs `nest` running, though —
+Compose won't auto-start a profile-gated dependency just because you named the
+dependent service).
 
 ## LiveKit: Cloud vs native
 

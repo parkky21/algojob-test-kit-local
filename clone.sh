@@ -6,49 +6,54 @@
 #   ./clone.sh local-run       override the branch for every repo that has one
 #   ./clone.sh --list          show the repo -> branch mapping (and enabled/skipped) and exit
 #
-# Six of the seven repos are always cloned: they're built into one shared
-# Docker image (see Dockerfile), so the build needs all of them present
-# regardless of which containers you plan to start. Only algojob-proctoring-mise
-# (native-only — excluded from the Docker build) is toggleable, via
-# CLONE_PROCTORING in services.conf. Run ./configure.sh for an interactive
-# picker, or copy services.conf.example to services.conf and edit by hand.
+# Selection is per-repo via env vars (CLONE_AGENT_SERVER, CLONE_ALGOJOBS_SERVICE,
+# CLONE_NEST, CLONE_FRONTEND, CLONE_APEX, CLONE_PERSONALIZED, CLONE_PROCTORING —
+# see the SERVICES table below), each defaulting to 1 (clone) if unset. No
+# config file is read — this is stateless by design. Run ./configure.sh for an
+# interactive per-repo picker (it exports these and calls this script for you),
+# or export them yourself for a one-off: `CLONE_PROCTORING=0 ./clone.sh`.
+#
+# WARNING: six of the seven repos are built into one shared Docker image (see
+# Dockerfile) — skipping any of THOSE (marked "required" in --list /
+# SERVICES below) means `docker compose build` fails outright on its COPY
+# step, even for services you didn't skip. Only algojob-proctoring-mise
+# (native-only, excluded from the Docker build) is safe to skip freely.
 set -uo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$ROOT_DIR"
 
-if [ -f services.conf ]; then
-  source services.conf
-elif [ -f services.conf.example ]; then
-  source services.conf.example
-fi
-: "${CLONE_PROCTORING:=1}"
-
 ORG="https://github.com/algorootprod"
 
-# repo (= folder name)|default-branch
+# repo (= folder name)|default-branch|CLONE_* env var|required-for-docker-build(1/0)
 # algojob-proctoring-mise and Algojob-debug-mise were split out of the old
 # algojob_microservice_python monorepo (see git history there) into their
 # own repos; those only have `main`, not `local-run`.
 SERVICES=(
-  "algojob-agent-server|local-run"
-  "algojobs_service|local-run"
-  "algojob_nest|local-run"
-  "algojobs_frontend|local-run"
-  "algoapex-microservice|local-run"
-  "algojob-proctoring-mise|main"
-  "Algojob-debug-mise|main"
+  "algojob-agent-server|local-run|CLONE_AGENT_SERVER|1"
+  "algojobs_service|local-run|CLONE_ALGOJOBS_SERVICE|1"
+  "algojob_nest|local-run|CLONE_NEST|1"
+  "algojobs_frontend|local-run|CLONE_FRONTEND|1"
+  "algoapex-microservice|local-run|CLONE_APEX|1"
+  "algojob-proctoring-mise|main|CLONE_PROCTORING|0"
+  "Algojob-debug-mise|main|CLONE_PERSONALIZED|1"
 )
 
+: "${CLONE_AGENT_SERVER:=1}"
+: "${CLONE_ALGOJOBS_SERVICE:=1}"
+: "${CLONE_NEST:=1}"
+: "${CLONE_FRONTEND:=1}"
+: "${CLONE_APEX:=1}"
+: "${CLONE_PROCTORING:=1}"
+: "${CLONE_PERSONALIZED:=1}"
+
 if [ "${1:-}" = "--list" ]; then
-  printf "%-30s %-10s %s\n" "REPO (= folder)" "BRANCH" "STATUS"
+  printf "%-30s %-10s %-9s %s\n" "REPO (= folder)" "BRANCH" "REQUIRED" "STATUS"
   for e in "${SERVICES[@]}"; do
-    IFS='|' read -r repo branch <<<"$e"
+    IFS='|' read -r repo branch var required <<<"$e"
     status="enabled"
-    if [ "$repo" = "algojob-proctoring-mise" ] && [ "$CLONE_PROCTORING" != "1" ]; then
-      status="skipped (CLONE_PROCTORING=0)"
-    fi
-    printf "%-30s %-10s %s\n" "$repo" "$branch" "$status"
+    [ "${!var}" != "1" ] && status="skipped ($var=0)"
+    printf "%-30s %-10s %-9s %s\n" "$repo" "$branch" "$([ "$required" = "1" ] && echo yes || echo no)" "$status"
   done
   exit 0
 fi
@@ -59,12 +64,14 @@ echo
 
 failed=()
 skipped=()
+skipped_required=()
 for entry in "${SERVICES[@]}"; do
-  IFS='|' read -r repo default_branch <<<"$entry"
+  IFS='|' read -r repo default_branch var required <<<"$entry"
 
-  if [ "$repo" = "algojob-proctoring-mise" ] && [ "$CLONE_PROCTORING" != "1" ]; then
-    echo "→ $repo — skipped (CLONE_PROCTORING=0 in services.conf)"
+  if [ "${!var}" != "1" ]; then
+    echo "→ $repo — skipped ($var=0)"
     skipped+=("$repo")
+    [ "$required" = "1" ] && skipped_required+=("$repo")
     continue
   fi
 
@@ -102,8 +109,16 @@ if [ ${#failed[@]} -gt 0 ]; then
 fi
 
 if [ ${#skipped[@]} -gt 0 ]; then
-  echo "Skipped (see services.conf): ${skipped[*]}"
+  echo "Skipped: ${skipped[*]}"
 fi
+if [ ${#skipped_required[@]} -gt 0 ]; then
+  echo
+  echo "WARNING: ${skipped_required[*]} are built into the shared Docker image —" >&2
+  echo "'docker compose build' / './start.sh --build' will fail without them." >&2
+  echo "Re-run ./clone.sh (or ./configure.sh) without skipping them if you plan to" >&2
+  echo "run the Docker stack." >&2
+fi
+echo
 echo "All selected services present."
 echo
 echo "Next:"

@@ -6,9 +6,12 @@
 #   ./start.sh --build      build the shared image (always all 6 app services — see below) and exit
 #   ./start.sh --down       stop containers (and this script's livekit, via Ctrl-C)
 #
-# Which app services actually start is read from services.conf (falls back to
-# services.conf.example — start everything — if that's missing). Run
-# ./configure.sh for an interactive picker, or edit services.conf by hand.
+# Which app services actually start is controlled by env vars (START_APEX,
+# START_NEST, START_FRONTEND, START_ALGOJOBS_SERVICE, START_PERSONALIZED,
+# START_AGENT_SERVER), each defaulting to 1 (start) if unset. No config file
+# is read — this is stateless by design. Run ./configure.sh for an interactive
+# per-service picker (it exports these and calls this script for you), or
+# export them yourself for a one-off: `START_APEX=0 ./start.sh`.
 # Infra (redis/keycloak/elasticmq/minio) always starts regardless of selection.
 #
 # LiveKit is the one service left outside Docker. It advertises a single IP as
@@ -27,11 +30,6 @@ set -uo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$ROOT_DIR"
 
-if [ -f services.conf ]; then
-  source services.conf
-elif [ -f services.conf.example ]; then
-  source services.conf.example
-fi
 : "${START_ALGOJOBS_SERVICE:=1}"
 : "${START_APEX:=1}"
 : "${START_PERSONALIZED:=1}"
@@ -48,7 +46,7 @@ fi
 
 # All six app profiles, used for --build (the shared image is cheap to build
 # in full regardless of which containers you plan to start today) and --down
-# (to make sure nothing gets orphaned when services.conf changes over time).
+# (to make sure nothing gets orphaned if your selection changed since `up`).
 ALL_APP_PROFILES=(--profile algojobs-service --profile apex --profile personalized --profile nest --profile frontend --profile agent-server)
 
 # Only the selected app profiles, used for `up`.
@@ -73,7 +71,7 @@ for arg in "$@"; do
 done
 
 if $do_build; then
-  echo "Building the shared image (all 6 app services, regardless of services.conf)..."
+  echo "Building the shared image (always all 6 app services, regardless of START_* selection)..."
   docker compose "${ALL_APP_PROFILES[@]}" build
   exit $?
 fi
@@ -82,9 +80,10 @@ if $do_down; then
   echo "Stopping containers..."
   # --profile docker-livekit is required to also remove a livekit container left
   # over from the Linux/host-networking path, and all app profiles are passed
-  # so `down` isn't fooled by services.conf having changed since `up` —
-  # `docker compose down` silently skips profiled services that aren't active,
-  # leaving them running (e.g. livekit holding port 7880).
+  # so `down` isn't fooled by a different START_* selection than the `up` that
+  # started these containers — `docker compose down` silently skips profiled
+  # services that aren't active, leaving them running (e.g. livekit holding
+  # port 7880).
   docker compose --profile docker-livekit "${ALL_APP_PROFILES[@]}" down
   echo "If livekit-server is still running natively, stop it with Ctrl-C in its terminal."
   exit 0
