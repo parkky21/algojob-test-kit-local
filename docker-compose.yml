@@ -23,6 +23,18 @@
 # ARM64 wheel. Run it natively alongside
 # (cd algojob-proctoring-mise && ./run.sh), or see the
 # Dockerfile note to build it in — which makes the image x86_64-only.
+#
+# SELECTIVE START: the six app services below (algojobs-service, apex,
+# personalized, nest, frontend, agent-server) each carry a `profiles:` entry
+# matching their own service name, gating whether they start — same mechanism
+# already used for `livekit`. This means bare `docker compose up -d` now only
+# starts infra (redis/keycloak/elasticmq/minio) — nothing is implicitly built
+# either, since profile filtering applies to `build` too. Use `./start.sh`
+# (which passes the right `--profile` flags per services.conf) or
+# `./configure.sh` to pick a subset interactively; naming a service explicitly
+# on the CLI (`docker compose up -d nest`) still bypasses profile filtering as
+# usual. All six are still cloned/built into the one shared image regardless
+# of selection — see services.conf.example.
 
 x-app: &app
   build:
@@ -174,6 +186,7 @@ services:
 
   algojobs-service:
     <<: *app
+    profiles: ['algojobs-service']
     container_name: algojob-algojobs-service
     working_dir: /app/algojobs_service
     command: /app/algojobs_service/.venv/bin/uvicorn main:app --host 0.0.0.0 --port 8000
@@ -202,6 +215,7 @@ services:
 
   apex:
     <<: *app
+    profiles: ['apex']
     container_name: algojob-apex
     working_dir: /app/apex
     command: /app/apex/.venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8001
@@ -236,6 +250,7 @@ services:
 
   personalized:
     <<: *app
+    profiles: ['personalized']
     container_name: algojob-personalized
     working_dir: /app/personalized
     command: /app/personalized/.venv/bin/uvicorn main:app --host 0.0.0.0 --port 8070
@@ -250,6 +265,7 @@ services:
 
   nest:
     <<: *app
+    profiles: ['nest']
     container_name: algojob-nest
     working_dir: /app/nest
     command: node dist/main
@@ -296,6 +312,7 @@ services:
 
   frontend:
     <<: *app
+    profiles: ['frontend']
     container_name: algojob-frontend
     working_dir: /app/frontend
     command: /usr/local/bin/frontend-entry.sh
@@ -325,6 +342,7 @@ services:
 
   agent-server:
     <<: *app
+    profiles: ['agent-server']
     container_name: algojob-agent-server
     working_dir: /app/agent_server
     # Outbound LiveKit worker — binds no port.

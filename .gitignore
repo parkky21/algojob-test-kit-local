@@ -15,6 +15,10 @@ Algojob-debug-mise/
 **/.env
 !.env.example
 
+# Per-machine service selection (see services.conf.example / configure.sh) —
+# not shared config, like .env.
+/services.conf
+
 # Runtime output from dev.sh / start.sh
 logs/
 

@@ -4,7 +4,7 @@ Two supported paths:
 
 - **Local development (macOS)** — everything native, one command: `./dev.sh`. See below.
 - **Docker (Linux deploy, or local smoke test)** — one container per service from a single shared
-  image: `docker compose up -d --build` from the repo root. See [Docker deploy](#docker-deploy).
+  image: `./start.sh --build && ./start.sh` from the repo root. See [Docker deploy](#docker-deploy).
 
 ---
 
@@ -210,7 +210,8 @@ different process from it. One build, proper per-service isolation.
 **LiveKit is the one exception — it runs natively on the host.** Start everything with:
 
 ```bash
-./start.sh                # 9 containers + native livekit-server (foreground)
+./start.sh --build        # build algojob-stack:latest (all 6 app services — see below)
+./start.sh                # containers (per services.conf) + native livekit-server (foreground)
 ./start.sh --no-livekit   # containers only
 ./start.sh --down         # stop containers
 ```
@@ -226,6 +227,19 @@ docker compose logs -f nest       # per-service logs
 docker compose restart apex       # per-service restart
 docker compose ps
 ```
+
+**Selective services.** The 6 app services (`algojobs-service`, `apex`, `personalized`,
+`nest`, `frontend`, `agent-server`) each carry a `profiles:` entry matching their own
+name — the same mechanism `livekit` already used for its own opt-in. That means the bare
+`docker compose build` / `docker compose up -d` shown just above only touch infra by
+default; **`./start.sh` is what actually passes the right `--profile` flags**, reading
+them from `services.conf` (run `./configure.sh` for an interactive picker, or copy
+`services.conf.example` and edit it — everything is on by default, so existing habits
+of running `docker compose` directly with no service list keep working as long as you
+go through `./start.sh`). All 6 repos are still cloned and built into the one shared
+image regardless of selection — only `algojob-proctoring-mise` (native-only) is
+actually skippable at clone time. `frontend` depends on `nest` at the Compose level, so
+enabling `frontend` always pulls `nest` in too.
 
 ### Switching LiveKit: Cloud vs local native
 
@@ -294,11 +308,22 @@ it never starts by default. It is appropriate on **Linux** together with `docker
 where host networking makes ICE a non-issue:
 
 ```bash
-docker compose --profile docker-livekit -f docker-compose.yml -f docker-compose.host.yml up -d
+docker compose --profile docker-livekit --profile algojobs-service --profile apex \
+  --profile personalized --profile nest --profile frontend --profile agent-server \
+  -f docker-compose.yml -f docker-compose.host.yml up -d
 ```
 
-Note that `docker compose down` **skips profiled services**, so a stray `livekit` container can
-keep holding port 7880. Use `docker compose --profile docker-livekit down` (which is what
+The extra `--profile` flags are needed because the 6 app services are now also
+profile-gated (see "Selective services" above) — `--profile docker-livekit` alone would
+start LiveKit but nothing else app-level. `./start.sh` handles this for you (it doesn't
+manage `docker-livekit` itself, so still pass that flag by hand on Linux, or add
+`--profile docker-livekit` — `./start.sh` only reads `services.conf` for the 6 app
+services).
+
+Note that `docker compose down` **skips profiled services**, so a stray `livekit` (or
+disabled app) container can keep holding its port. Use `docker compose --profile
+docker-livekit --profile algojobs-service --profile apex --profile personalized
+--profile nest --profile frontend --profile agent-server down` (which is what
 `./start.sh --down` does).
 
 **Verified working on macOS** — all services healthy, cross-container wiring confirmed:
@@ -315,6 +340,9 @@ the mounted `.env` files in all three runtimes (`@nestjs/config`, `@next/env`, `
 ```bash
 docker compose -f docker-compose.yml -f docker-compose.host.yml up -d
 ```
+
+(Add `--profile` flags for the app services you want running, as shown above, or use
+`./start.sh` — this line only illustrates the overlay switch.)
 
 Bridge networking is poor for WebRTC — LiveKit advertises ICE candidates as raw IPs, and inside a
 bridge network that's a private `172.x` address no external browser can reach. The overlay switches
@@ -363,9 +391,14 @@ export PUBLIC_LIVEKIT_URL=wss://algojob.example.com:7880
 # the browser on this deploy — same reasoning as the two URLs above.
 export PUBLIC_S3_ENDPOINT_URL=https://algojob.example.com:9000
 
-docker compose up -d --build     # first build takes a while (~5-6GB image)
+docker compose --profile algojobs-service --profile apex --profile personalized \
+  --profile nest --profile frontend --profile agent-server \
+  up -d --build     # first build takes a while (~5-6GB image)
+# Equivalently: ./start.sh --build && ./start.sh --no-livekit (reads services.conf —
+# make sure it enables everything you want running on this server; see "Selective
+# services" above). Bare `docker compose up -d --build` with no --profile flags now
+# only starts infra, since the 6 app services are profile-gated.
 docker compose logs -f algojob
-```
 
 **Verify, in this order:**
 
@@ -435,6 +468,9 @@ For a Linux deploy, add the host-networking overlay:
 docker compose -f docker-compose.yml -f docker-compose.host.yml up -d
 ```
 
+(Add `--profile` flags for the app services you want running — see "Selective
+services" in the README, or just use `./start.sh`.)
+
 This matters specifically for **LiveKit**: on bridge networking it advertises ICE candidates as its
 container-private address (observed: `nodeIP: 172.24.0.7`), which a browser on another machine
 cannot reach. Host networking removes the NAT hop so it advertises a real address. Everything else
@@ -452,7 +488,9 @@ public hostname — not `localhost`, since the browser isn't on the same machine
 ```bash
 PUBLIC_API_BASE_URL=https://algojob.example.com \
 PUBLIC_LIVEKIT_URL=wss://algojob.example.com:7880 \
-docker compose up -d
+docker compose --profile algojobs-service --profile apex --profile personalized \
+  --profile nest --profile frontend --profile agent-server \
+  up -d
 ```
 
 These are injected at **container start**, not build time, so one image is portable across

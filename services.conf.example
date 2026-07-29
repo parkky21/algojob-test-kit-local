@@ -1,0 +1,22 @@
+# services.conf.example — template for services.conf (gitignored, per-machine).
+# Copy this to services.conf and edit, or run ./configure.sh for an interactive
+# picker. clone.sh and start.sh fall back to this file when services.conf is
+# absent, so the default behavior (clone + start everything) is unchanged.
+#
+# All six repos below are ALWAYS cloned and built into the shared Docker image
+# (docker-compose.yml's app services all share algojob-stack:latest) — these
+# flags only control which of their containers ./start.sh actually starts.
+#
+# NOTE: frontend depends_on nest at the compose level, so START_FRONTEND=1
+# forces nest on too regardless of START_NEST (start.sh/configure.sh both
+# enforce this — Compose errors out otherwise: "depends on undefined service").
+START_ALGOJOBS_SERVICE=1
+START_APEX=1
+START_PERSONALIZED=1
+START_NEST=1
+START_FRONTEND=1
+START_AGENT_SERVER=1
+
+# 1 = clone algojob-proctoring-mise too (native/dev.sh only — excluded from the
+# Docker build, see Dockerfile's py-build stage note), 0 = skip it.
+CLONE_PROCTORING=1

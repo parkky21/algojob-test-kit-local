@@ -21,14 +21,42 @@ Algojob-debug-mise/.env
 algojob-proctoring-mise/.env
 ```
 
+Optional: run `./configure.sh` to interactively pick which app services you actually
+want running (e.g. just `frontend` + `nest` while working on the backend). It writes
+`services.conf`, which `clone.sh` and `start.sh` both read. Skip this and everything
+clones/starts by default — see [Selective services](#selective-services) below.
+
 ## Build + run (full stack)
 
 ```bash
-docker compose build
-./start.sh                # containers + native LiveKit (Ctrl-C stops LiveKit only)
-./start.sh --no-livekit   # containers only
-./start.sh --down         # stop containers
+./start.sh --build         # build the shared image (see docker-compose.yml comment: this
+                            # always builds all 6 app services, regardless of services.conf)
+./start.sh                 # containers (per services.conf) + native LiveKit (Ctrl-C stops LiveKit only)
+./start.sh --no-livekit    # containers only
+./start.sh --down          # stop containers
 ```
+
+## Selective services
+
+The 6 app services in `docker-compose.yml` (`algojobs-service`, `apex`, `personalized`,
+`nest`, `frontend`, `agent-server`) are each gated behind a Compose `profiles:` entry
+matching their name — same mechanism already used for `livekit`. Bare `docker compose
+up -d` / `docker compose build` therefore only touch infra (`redis`/`keycloak`/
+`elasticmq`/`minio`) by default; nothing app-level starts or builds without a profile.
+
+`./start.sh` and `./start.sh --build` read `services.conf` and pass the right
+`--profile` flags for you — that's the supported way to run a subset. Generate/edit it
+with `./configure.sh`, or copy `services.conf.example` (defaults to everything on) and
+edit by hand. It's gitignored — a per-machine preference, like `.env`.
+
+Note: `frontend` depends on `nest` at the Compose level, so enabling `frontend` always
+enables `nest` too (`configure.sh`/`start.sh` do this automatically; disabling `nest`
+while leaving `frontend` on isn't a valid combination — Compose would refuse to start).
+
+All 6 repos are still cloned and built into the one shared image regardless of this
+selection — see the note in `services.conf.example`. Only `algojob-proctoring-mise`
+(native-only, already excluded from the Docker build for arch reasons) is actually
+skippable at clone time, via `CLONE_PROCTORING` in the same file.
 
 ## Build + run a single service only
 
@@ -40,6 +68,8 @@ docker compose up -d <service>
 `<service>`: `frontend` `nest` `apex` `personalized` `agent-server` `algojobs-service` `elasticmq` `redis` `keycloak` `minio`
 
 Only rebuilds/recreates that one container — the rest of the stack keeps running.
+Naming a service explicitly here bypasses profile filtering, so this works regardless
+of what's in `services.conf`.
 
 ## LiveKit: Cloud vs native
 

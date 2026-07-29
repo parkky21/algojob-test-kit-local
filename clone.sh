@@ -1,14 +1,28 @@
 #!/usr/bin/env bash
-# Clones (or updates) the seven AlgoJob service repos into this directory,
-# each into a folder matching its repo name.
+# Clones (or updates) the AlgoJob service repos into this directory, each into
+# a folder matching its repo name.
 #
-#   ./clone.sh                 clone/update all seven, each on its default branch
+#   ./clone.sh                 clone/update the selected repos, each on its default branch
 #   ./clone.sh local-run       override the branch for every repo that has one
-#   ./clone.sh --list          show the repo -> branch mapping and exit
+#   ./clone.sh --list          show the repo -> branch mapping (and enabled/skipped) and exit
+#
+# Six of the seven repos are always cloned: they're built into one shared
+# Docker image (see Dockerfile), so the build needs all of them present
+# regardless of which containers you plan to start. Only algojob-proctoring-mise
+# (native-only — excluded from the Docker build) is toggleable, via
+# CLONE_PROCTORING in services.conf. Run ./configure.sh for an interactive
+# picker, or copy services.conf.example to services.conf and edit by hand.
 set -uo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$ROOT_DIR"
+
+if [ -f services.conf ]; then
+  source services.conf
+elif [ -f services.conf.example ]; then
+  source services.conf.example
+fi
+: "${CLONE_PROCTORING:=1}"
 
 ORG="https://github.com/algorootprod"
 
@@ -27,10 +41,14 @@ SERVICES=(
 )
 
 if [ "${1:-}" = "--list" ]; then
-  printf "%-30s %s\n" "REPO (= folder)" "BRANCH"
+  printf "%-30s %-10s %s\n" "REPO (= folder)" "BRANCH" "STATUS"
   for e in "${SERVICES[@]}"; do
     IFS='|' read -r repo branch <<<"$e"
-    printf "%-30s %s\n" "$repo" "$branch"
+    status="enabled"
+    if [ "$repo" = "algojob-proctoring-mise" ] && [ "$CLONE_PROCTORING" != "1" ]; then
+      status="skipped (CLONE_PROCTORING=0)"
+    fi
+    printf "%-30s %-10s %s\n" "$repo" "$branch" "$status"
   done
   exit 0
 fi
@@ -40,8 +58,16 @@ echo "${BRANCH_OVERRIDE:+Branch override: $BRANCH_OVERRIDE (applied to every rep
 echo
 
 failed=()
+skipped=()
 for entry in "${SERVICES[@]}"; do
   IFS='|' read -r repo default_branch <<<"$entry"
+
+  if [ "$repo" = "algojob-proctoring-mise" ] && [ "$CLONE_PROCTORING" != "1" ]; then
+    echo "→ $repo — skipped (CLONE_PROCTORING=0 in services.conf)"
+    skipped+=("$repo")
+    continue
+  fi
+
   branch="${BRANCH_OVERRIDE:-$default_branch}"
   folder="$repo"
   url="$ORG/$repo.git"
@@ -75,7 +101,10 @@ if [ ${#failed[@]} -gt 0 ]; then
   exit 1
 fi
 
-echo "All seven services present."
+if [ ${#skipped[@]} -gt 0 ]; then
+  echo "Skipped (see services.conf): ${skipped[*]}"
+fi
+echo "All selected services present."
 echo
 echo "Next:"
 echo "  1. cp .env.example .env          # then edit if your LAN IP differs"
