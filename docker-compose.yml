@@ -92,6 +92,51 @@ services:
       retries: 5
       start_period: 10s
 
+  minio:
+    # Offline S3 for audio uploads (nest -> bucket -> apex transcription, and
+    # apex TTS -> bucket -> browser via nest-presigned URLs). Pinned to the
+    # last community release that ships the full web console.
+    image: minio/minio:RELEASE.2025-04-22T22-12-26Z
+    container_name: algojob-minio
+    restart: unless-stopped
+    command: server /data --console-address ':9001'
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+    ports:
+      - '9000:9000' # S3 API — also the browser-facing presigned-URL host
+      - '9001:9001' # web console
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ['CMD', 'mc', 'ready', 'local'] # mc ships inside the minio image
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  minio-init:
+    # One-shot bucket bootstrap — the official image has no MINIO_DEFAULT_BUCKETS
+    # (that's bitnami-only). Exits 0 when the bucket exists; compose >= 2.20
+    # counts a cleanly-exited restart:"no" service as satisfied by `up --wait`,
+    # so start.sh is unaffected.
+    image: minio/mc:RELEASE.2025-04-16T18-13-26Z
+    container_name: algojob-minio-init
+    restart: 'no'
+    depends_on:
+      minio:
+        condition: service_healthy
+    environment:
+      # Overridden to localhost by docker-compose.host.yml (no service DNS there).
+      MINIO_URL: http://minio:9000
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+    entrypoint: ['/bin/sh', '-c']
+    command:
+      - |
+        mc alias set local "$$MINIO_URL" "$$MINIO_ROOT_USER" "$$MINIO_ROOT_PASSWORD" &&
+        mc mb --ignore-existing local/algojobterraformstate
+
   # ------------------------------------------------------------- services ---
   # LiveKit runs NATIVELY on the host, not here — start it with ./start.sh
   # (or livekit-local/run-livekit.sh). This service is kept only for the Linux
@@ -170,11 +215,13 @@ services:
       # containers are needed.
       RUN_CONSUMERS: 'true'
       SQS_ENDPOINT_URL: http://elasticmq:9324
-      # NOTE: AWS_ACCESS_KEY_ID/SECRET are deliberately NOT overridden here.
-      # They are shared with real S3 (audio uploads), so dummy values break
-      # S3 with "The AWS Access Key Id you provided does not exist".
-      # ElasticMQ does not validate signatures, so the real credentials from
-      # .env work fine against it.
+      # MinIO stands in for S3 (audio uploads), so the AWS creds ARE dummied
+      # now (they were previously kept real because S3 was real). MinIO
+      # validates signatures, so these must match MINIO_ROOT_USER/PASSWORD;
+      # ElasticMQ doesn't validate at all, so the same dummies work for SQS too.
+      S3_ENDPOINT_URL: http://minio:9000
+      AWS_ACCESS_KEY_ID: ${MINIO_ROOT_USER:-minioadmin}
+      AWS_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin}
       SQS_USER_SIGNUP_URL: http://elasticmq:9324/000000000000/algoapex-user-signup.fifo
       SQS_TEST_COMPLETED_URL: http://elasticmq:9324/000000000000/algoapex-test-completed.fifo
       SQS_EVALUATION_COMPLETED_URL: http://elasticmq:9324/000000000000/algoapex-evaluation-completed.fifo
@@ -182,6 +229,8 @@ services:
     depends_on:
       elasticmq:
         condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
     ports:
       - '8001:8001'
 
@@ -221,11 +270,15 @@ services:
       PYTHON_PERSONALIZED_SERVICE: http://personalized:8070
       ALGOAPEX_API_URL: http://apex:8001/v1
       SQS_ENDPOINT_URL: http://elasticmq:9324
-      # NOTE: AWS_ACCESS_KEY_ID/SECRET are deliberately NOT overridden here.
-      # They are shared with real S3 (audio uploads), so dummy values break
-      # S3 with "The AWS Access Key Id you provided does not exist".
-      # ElasticMQ does not validate signatures, so the real credentials from
-      # .env work fine against it.
+      # MinIO stands in for S3 — creds dummied, see the note on apex.
+      S3_ENDPOINT_URL: http://minio:9000
+      # Browser-resolved (presigned audio URLs are fetched by the user's
+      # browser, like API_BASE_URL on frontend) -> must be reachable from the
+      # user's machine, not container DNS. Signatures cover the Host header, so
+      # presigning happens against this endpoint while uploads use the one above.
+      S3_PUBLIC_ENDPOINT_URL: ${PUBLIC_S3_ENDPOINT_URL:-http://localhost:9000}
+      AWS_ACCESS_KEY_ID: ${MINIO_ROOT_USER:-minioadmin}
+      AWS_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin}
       SQS_USER_SIGNUP_URL: http://elasticmq:9324/000000000000/algoapex-user-signup.fifo
       SQS_TEST_COMPLETED_URL: http://elasticmq:9324/000000000000/algoapex-test-completed.fifo
       SQS_EVALUATION_COMPLETED_URL: http://elasticmq:9324/000000000000/algoapex-evaluation-completed.fifo
@@ -236,6 +289,8 @@ services:
         condition: service_healthy
       elasticmq:
         condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
     ports:
       - '5001:5001'
 
@@ -292,4 +347,6 @@ volumes:
   redis_data:
     driver: local
   keycloak_data:
+    driver: local
+  minio_data:
     driver: local

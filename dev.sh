@@ -30,7 +30,7 @@ SERVICES=(
 )
 
 COLORS=(31 32 33 34 35 36 91 92 93 94)
-INFRA_CONTAINERS=(algojob-infra-redis algojob-infra-keycloak algojob-infra-elasticmq)
+INFRA_CONTAINERS=(algojob-infra-redis algojob-infra-keycloak algojob-infra-elasticmq algojob-infra-minio)
 
 do_list=false
 do_down=false
@@ -69,7 +69,7 @@ if ! $no_infra; then
     brew services stop redis
   fi
 
-  echo "Starting shared infra (redis, keycloak, elasticmq)..."
+  echo "Starting shared infra (redis, keycloak, elasticmq, minio)..."
   (cd "$ROOT_DIR/infra" && docker compose up -d)
 
   echo "Waiting for infra to become healthy..."

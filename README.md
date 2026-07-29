@@ -37,7 +37,7 @@ docker compose build <service>
 docker compose up -d <service>
 ```
 
-`<service>`: `frontend` `nest` `apex` `personalized` `agent-server` `algojobs-service` `elasticmq` `redis` `keycloak`
+`<service>`: `frontend` `nest` `apex` `personalized` `agent-server` `algojobs-service` `elasticmq` `redis` `keycloak` `minio`
 
 Only rebuilds/recreates that one container — the rest of the stack keeps running.
 

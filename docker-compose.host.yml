@@ -39,6 +39,15 @@ services:
     network_mode: host
     ports: !reset []
 
+  minio:
+    network_mode: host
+    ports: !reset []
+
+  minio-init:
+    network_mode: host
+    environment:
+      MINIO_URL: http://localhost:9000
+
   livekit:
     network_mode: host
     ports: !reset []
@@ -59,6 +68,7 @@ services:
     ports: !reset []
     environment:
       SQS_ENDPOINT_URL: http://localhost:9324
+      S3_ENDPOINT_URL: http://localhost:9000
       SQS_USER_SIGNUP_URL: http://localhost:9324/000000000000/algoapex-user-signup.fifo
       SQS_TEST_COMPLETED_URL: http://localhost:9324/000000000000/algoapex-test-completed.fifo
       SQS_EVALUATION_COMPLETED_URL: http://localhost:9324/000000000000/algoapex-evaluation-completed.fifo
@@ -78,6 +88,8 @@ services:
       PYTHON_PERSONALIZED_SERVICE: http://localhost:8070
       ALGOAPEX_API_URL: http://localhost:8001/v1
       SQS_ENDPOINT_URL: http://localhost:9324
+      S3_ENDPOINT_URL: http://localhost:9000
+      S3_PUBLIC_ENDPOINT_URL: http://localhost:9000
       SQS_USER_SIGNUP_URL: http://localhost:9324/000000000000/algoapex-user-signup.fifo
       SQS_TEST_COMPLETED_URL: http://localhost:9324/000000000000/algoapex-test-completed.fifo
       SQS_EVALUATION_COMPLETED_URL: http://localhost:9324/000000000000/algoapex-evaluation-completed.fifo

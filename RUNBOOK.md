@@ -11,8 +11,9 @@ Two supported paths:
 # Running AlgoJob locally
 
 All 7 services run natively (no Docker) for app code — `npm run dev`, `npm run start:dev`,
-`uv run main.py`. Only three infra pieces run in Docker: Redis, Keycloak, and ElasticMQ (a local
-SQS-compatible emulator), because they're stateful/Java and nobody edits their code.
+`uv run main.py`. Only four infra pieces run in Docker: Redis, Keycloak, ElasticMQ (a local
+SQS-compatible emulator), and MinIO (a local S3-compatible emulator), because they're
+stateful/Java(-ish) and nobody edits their code.
 
 MongoDB (Atlas) and Postgres (Neon) stay cloud-hosted — every service's `.env` already points at
 them, unchanged.
@@ -42,7 +43,7 @@ against both on startup).
 ```bash
 # once, before anything else
 brew services stop redis          # frees 6379 for the Docker one
-cd infra && docker compose up -d  # redis, keycloak, elasticmq
+cd infra && docker compose up -d  # redis, keycloak, elasticmq, minio
 ```
 
 ### livekit-local — LiveKit server (native)
@@ -81,10 +82,14 @@ cd algoapex-microservice && ./run.sh
 ```
 - Port: **8001** (from `.env`'s `API_PORT=8001` — `run.sh`/`scripts/run_api.sh` reads it explicitly
   since bash doesn't source `.env` on its own)
-- Requires: `infra` up (elasticmq)
+- Requires: `infra` up (elasticmq, minio)
 - `.env` already has `API_PORT=8001` and the local `SQS_ENDPOINT_URL`/`SQS_*_URL` overrides —
   nothing to add. `RUN_CONSUMERS=true` means this one process also hosts the signup/test-completed
   consumers — no separate worker terminals needed for normal dev.
+- To point audio storage (`AUDIO_STORAGE=s3`) at the local MinIO instead of real AWS S3, set in
+  `.env`: `S3_ENDPOINT_URL=http://localhost:9000`, `AWS_ACCESS_KEY_ID=minioadmin`,
+  `AWS_SECRET_ACCESS_KEY=minioadmin`. Unset `S3_ENDPOINT_URL` (and restore real creds) to go back
+  to real S3 — everything else about the code path is unchanged either way.
 - Health: `curl localhost:8001/v1/health`
 - Optional standalone workers (only if you need them running outside the API process):
   `./scripts/run_worker.sh signup` / `test_completed` / `cron_consumer`
@@ -111,9 +116,13 @@ cd algojob-proctoring-mise && ./run.sh
 cd algojob_nest && ./run.sh
 ```
 - Port: **5001**
-- Requires: `infra` up (redis, keycloak)
+- Requires: `infra` up (redis, keycloak, minio)
 - `.env` already has `REDIS_HOST=localhost`/`REDIS_PORT=6379`, `KEYCLOAK_URL=http://localhost:8180`,
   and the local `SQS_ENDPOINT_URL`/`SQS_*_URL` overrides — nothing to add
+- To point audio storage at the local MinIO instead of real AWS S3, set in `.env`:
+  `S3_ENDPOINT_URL=http://localhost:9000`, `AWS_ACCESS_KEY_ID=minioadmin`,
+  `AWS_SECRET_ACCESS_KEY=minioadmin` (`S3_PUBLIC_ENDPOINT_URL` can be omitted natively — it
+  defaults to `S3_ENDPOINT_URL`, and everything is already `localhost`)
 - Health: `curl localhost:5001/health` — also watch the startup log for the
   `IntegrationConnectivityService` summary (Mongo/Redis/Keycloak/AlgoApex OK/FAIL per integration)
 - One-time manual step: create realm `algo-jobs` in the Keycloak admin console
@@ -143,6 +152,7 @@ cd algojobs_frontend && ./run.sh
 | algojob-proctoring-mise | 8080 |
 | keycloak (infra) | 8180 |
 | elasticmq (infra) | 9324 (+9325 UI) |
+| minio (infra) | 9000 (+9001 console) |
 
 ## Health checks
 
@@ -154,7 +164,17 @@ curl localhost:8080/health          # algojob-proctoring-mise
 curl localhost:5001/health          # nest
 curl localhost:3000                 # frontend
 curl localhost:3000/api/config      # confirm livekitUrl is ws://localhost:7880, not a cloud host
+curl -f localhost:9000/minio/health/live  # minio
 ```
+
+## Offline S3 (MinIO)
+
+MinIO stands in for AWS S3 so audio uploads work without network access. Console at
+`http://localhost:9000/minio/console` (or `:9001` when run standalone) — creds
+`minioadmin`/`minioadmin` by default (override via `MINIO_ROOT_USER`/`MINIO_ROOT_PASSWORD` in the
+root `.env`). The bucket `algojobterraformstate` is auto-created on startup by the one-shot
+`minio-init` container — no manual setup needed. Requires Docker Compose >= 2.20 for `up --wait`
+to correctly treat that container's clean exit as success.
 
 nest's own startup logs also run a connectivity prober (`integration-connectivity.service.ts`)
 that reports OK/SKIP/FAIL for Mongo, Redis, Keycloak, and AlgoApex on boot — the fastest signal
@@ -339,6 +359,9 @@ docker --version && docker compose version
 # is NOT on the same machine as the container, so localhost won't work here.
 export PUBLIC_API_BASE_URL=https://algojob.example.com
 export PUBLIC_LIVEKIT_URL=wss://algojob.example.com:7880
+# Only needed if MinIO's default (http://localhost:9000) isn't reachable from
+# the browser on this deploy — same reasoning as the two URLs above.
+export PUBLIC_S3_ENDPOINT_URL=https://algojob.example.com:9000
 
 docker compose up -d --build     # first build takes a while (~5-6GB image)
 docker compose logs -f algojob
@@ -356,6 +379,7 @@ curl localhost:8070/health        # personalized-learning
 curl localhost:8080/health        # proctoring
 curl localhost:5001/health        # nest
 curl localhost:3000/api/config    # frontend — check livekitUrl is your PUBLIC_LIVEKIT_URL
+curl -f localhost:9000/minio/health/live  # minio
 ```
 
 Then check nest's startup log for its `IntegrationConnectivityService` summary — it reports
