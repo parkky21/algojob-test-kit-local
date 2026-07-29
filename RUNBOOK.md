@@ -198,19 +198,18 @@ against the same URI) connects fine from inside a container, and the Dockerised 
 
 # Docker deploy
 
-The repo root has a `Dockerfile` + `docker-compose.yml` that build every service into **one shared
-image**, then run **one container per service** from it, alongside redis/keycloak/elasticmq.
+The repo root has a `Dockerfile` + `docker-compose.yml`. Four services (`algojobs-service`,
+`apex`, `personalized`, `agent-server`) build into **one shared image** from the root
+`Dockerfile`; `nest` and `frontend` each build from their **own repo's `Dockerfile`**
+instead (see "Independent builds" below). All six run as **one container per service**,
+alongside redis/keycloak/elasticmq/minio.
 
 ## One container per service — plus LiveKit natively
-
-`docker-compose.yml` runs **one container per service**, all from a single shared image. The
-Dockerfile builds every service into one image under `/app/<svc>`; each container then runs a
-different process from it. One build, proper per-service isolation.
 
 **LiveKit is the one exception — it runs natively on the host.** Start everything with:
 
 ```bash
-./start.sh --build        # build algojob-stack:latest (all 6 app services — see below)
+./start.sh --build        # build the selected app services (default: all six)
 ./start.sh                # containers + native livekit-server (foreground)
 ./start.sh --no-livekit   # containers only
 ./start.sh --down         # stop containers
@@ -219,8 +218,8 @@ different process from it. One build, proper per-service isolation.
 Or run the two halves yourself:
 
 ```bash
-docker compose build              # builds algojob-stack:latest once
-docker compose up -d              # 9 services
+docker compose build              # builds whatever's profile-selected (see below)
+docker compose up -d              # ditto
 cd livekit-local && ./run-livekit.sh   # native, separate terminal
 
 docker compose logs -f nest       # per-service logs
@@ -241,15 +240,35 @@ answers as env vars, then optionally runs `clone.sh`/`start.sh` for you in the s
 invocation), or export the vars yourself for a one-off:
 `START_APEX=0 START_PERSONALIZED=0 ./start.sh`.
 
-`clone.sh` has the same shape for which repos to clone (`CLONE_AGENT_SERVER`,
+**Independent builds.** `nest` and `frontend` build from their own repo's `Dockerfile`
+(`algojob_nest/Dockerfile`, `algojobs_frontend/Dockerfile`) — not the shared image the
+other four use. Verified: `docker compose build nest frontend` produces
+`algojob-nest:latest` / `algojob-frontend:latest` (never touches `algojob-stack:latest`
+or requires `algojobs_service`/`algoapex-microservice`/`Algojob-debug-mise`/
+`algojob-agent-server` to be cloned), and running just those two + infra
+(`docker compose --profile nest --profile frontend up -d --wait`) produces a fully
+healthy `nest` + `frontend` reachable at `localhost:5001`/`localhost:3000` exactly as
+before. `./start.sh --build` now only builds the currently-selected profiles (it used
+to always build all six unconditionally, back when everything shared one image and that
+was "free" — now that nest/frontend are separate builds, forcing all six would fail if
+you'd deliberately declined cloning one of them).
+
+One structural catch either way: `frontend` `depends_on` `nest` in `docker-compose.yml`,
+and **Compose validates that for `build` too, not just `up`** — `docker compose build
+frontend` *alone* fails with `no such service: nest`; you always need `docker compose
+build frontend nest` together (confirmed: nest builds are cache-fast once built once,
+so this costs nothing after the first build). `configure.sh`/`start.sh`/`clone.sh` all
+auto-enable `nest` whenever `frontend` is selected, for exactly this reason.
+
+`clone.sh` has the matching shape for which repos to clone (`CLONE_AGENT_SERVER`,
 `CLONE_ALGOJOBS_SERVICE`, `CLONE_NEST`, `CLONE_FRONTEND`, `CLONE_APEX`,
-`CLONE_PERSONALIZED`, `CLONE_PROCTORING`). **Six of the seven repos are built into the
-one shared image**, so declining to clone any of those breaks `docker compose build`
-outright — even for repos you didn't decline (`clone.sh --list` marks which are
-required; `configure.sh` warns inline if you decline one). Only
-`algojob-proctoring-mise` (native-only) is genuinely safe to skip. `frontend` depends on
-`nest` at the Compose level, so enabling `frontend` always pulls `nest` in too
-(`configure.sh`/`start.sh` enforce this automatically).
+`CLONE_PERSONALIZED`, `CLONE_PROCTORING`). Declining `algojobs_service`/
+`algoapex-microservice`/`Algojob-debug-mise`/`algojob-agent-server` breaks
+`docker compose build` outright for **all four** of those (shared image), even the ones
+you kept; declining `algojob_nest`/`algojobs_frontend` only affects that one service
+(independent build) — `clone.sh --list` marks which are which, `configure.sh` warns
+inline per-repo. Only `algojob-proctoring-mise` (native-only) is unconditionally safe to
+skip.
 
 ### Switching LiveKit: Cloud vs local native
 
@@ -515,10 +534,13 @@ service's `.env` loading is CWD-relative.
 
 ## Design notes / gotchas
 
-- **One image, many containers.** Every service runs the same `algojob-stack:latest` with a
-  different `command:` and `working_dir:`, so there's a single build but real per-container logs,
-  restarts and isolation. Restart one with `docker compose restart <service>`, tail one with
-  `docker compose logs -f <service>`.
+- **One shared image, many containers — except nest/frontend.** `algojobs-service`, `apex`,
+  `personalized`, and `agent-server` all run the same `algojob-stack:latest` with a different
+  `command:` and `working_dir:`, so there's a single build but real per-container logs, restarts
+  and isolation. `nest` and `frontend` instead build from their own repo's `Dockerfile` into their
+  own image (`algojob-nest:latest`, `algojob-frontend:latest`) — see "Independent builds" above.
+  Restart one with `docker compose restart <service>`, tail one with `docker compose logs -f
+  <service>`, same for all six either way.
 - **Per-container env removes a real collision class.** Two were genuine: `PORT` (read by *both*
   nest and Next.js standalone — a shared value made the frontend fight nest for 5001) and
   `ENABLE_CRON_JOB` (apex `false`, personalized-learning `true`, and the latter **defaults to

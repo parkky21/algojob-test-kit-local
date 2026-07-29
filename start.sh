@@ -3,7 +3,7 @@
 #
 #   ./start.sh              containers (detached) + native livekit-server (foreground)
 #   ./start.sh --no-livekit containers only
-#   ./start.sh --build      build the shared image (always all 6 app services — see below) and exit
+#   ./start.sh --build      build the selected app services and exit
 #   ./start.sh --down       stop containers (and this script's livekit, via Ctrl-C)
 #
 # Which app services actually start is controlled by env vars (START_APEX,
@@ -44,12 +44,19 @@ if [ "$START_FRONTEND" = "1" ] && [ "$START_NEST" != "1" ]; then
   START_NEST=1
 fi
 
-# All six app profiles, used for --build (the shared image is cheap to build
-# in full regardless of which containers you plan to start today) and --down
-# (to make sure nothing gets orphaned if your selection changed since `up`).
+# All six app profiles — used only for --down, to make sure nothing gets
+# orphaned if your selection changed since the `up` that started it (e.g.
+# nest built its own separate image; if it's not in ALL_APP_PROFILES here, a
+# leftover nest container from an earlier run wouldn't get cleaned up).
 ALL_APP_PROFILES=(--profile algojobs-service --profile apex --profile personalized --profile nest --profile frontend --profile agent-server)
 
-# Only the selected app profiles, used for `up`.
+# The selected app profiles — used for both `up` and `--build`. Unlike before
+# nest/frontend got their own independent Dockerfiles, building is NOT "cheap
+# to always do in full" anymore: algojobs-service/apex/personalized/agent-server
+# still share one image (so building any of those always builds the whole
+# thing regardless of which of the 4 you pick), but nest/frontend are now
+# separate builds that fail outright if their repo wasn't cloned — so --build
+# must respect the same selection as `up`, not force all 6.
 profile_flags=()
 [ "$START_ALGOJOBS_SERVICE" = "1" ] && profile_flags+=(--profile algojobs-service)
 [ "$START_APEX" = "1" ] && profile_flags+=(--profile apex)
@@ -71,8 +78,9 @@ for arg in "$@"; do
 done
 
 if $do_build; then
-  echo "Building the shared image (always all 6 app services, regardless of START_* selection)..."
-  docker compose "${ALL_APP_PROFILES[@]}" build
+  echo "Building (${profile_flags[*]:-infra only, nothing to build})..."
+  # ${arr[@]+...} guard: see the note on the `up` call below re: bash 3.2.
+  docker compose ${profile_flags[@]+"${profile_flags[@]}"} build
   exit $?
 fi
 

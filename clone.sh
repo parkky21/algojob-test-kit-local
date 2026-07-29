@@ -13,11 +13,23 @@
 # interactive per-repo picker (it exports these and calls this script for you),
 # or export them yourself for a one-off: `CLONE_PROCTORING=0 ./clone.sh`.
 #
-# WARNING: six of the seven repos are built into one shared Docker image (see
-# Dockerfile) — skipping any of THOSE (marked "required" in --list /
-# SERVICES below) means `docker compose build` fails outright on its COPY
-# step, even for services you didn't skip. Only algojob-proctoring-mise
-# (native-only, excluded from the Docker build) is safe to skip freely.
+# WARNING: four of the seven repos (algojob-agent-server, algojobs_service,
+# algoapex-microservice, Algojob-debug-mise) are built into one shared Docker
+# image (see Dockerfile) — skipping any of THOSE (marked "required" in --list
+# / SERVICES below) means `docker compose build` fails outright on its COPY
+# step, even for services you didn't skip.
+#
+# algojob_nest and algojobs_frontend are ALSO marked required, but for a
+# narrower reason: they each build from their OWN Dockerfile now
+# (docker-compose.yml's "INDEPENDENT BUILDS" note) — so skipping one of them
+# only breaks building/running that one service (`docker compose build nest`
+# or `build frontend`), not the shared image. (They're also still bundled
+# into the shared image's own build for the all-in-one-image deploy path, so
+# skipping them still blocks that path too — but not the other 4 services'
+# individual containers.)
+#
+# Only algojob-proctoring-mise (native-only, excluded from the Docker build
+# entirely) is safe to skip freely with no build-time consequences.
 set -uo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

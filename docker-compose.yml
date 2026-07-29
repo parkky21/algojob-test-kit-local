@@ -1,14 +1,16 @@
-# AlgoJob — one container per service, all from a single shared image.
+# AlgoJob — one container per service.
 #
-#   docker compose build          # builds algojob-stack:latest once
+#   docker compose build          # builds whatever's profile-selected (see below)
 #   docker compose up -d
 #   docker compose logs -f nest   # per-service logs
 #   docker compose restart apex   # per-service restart
 #
-# The Dockerfile produces ONE image containing every service under /app/<svc>.
-# Each service below runs a different process from that same image, so there's
-# a single build but proper per-container isolation, logs, health and restarts.
-# (This is the pattern apex's own compose already used for its SQS workers.)
+# Four services (algojobs-service, apex, personalized, agent-server) share ONE image
+# (algojob-stack:latest) built by the root Dockerfile, which produces that image
+# containing all four under /app/<svc> — each runs a different process from the same
+# image, so there's a single build but proper per-container isolation, logs, health and
+# restarts. (This is the pattern apex's own compose already used for its SQS workers.)
+# nest and frontend do NOT use this image — see "INDEPENDENT BUILDS" below.
 #
 # Networking: plain bridge + service-name DNS, which works identically on Linux
 # and macOS. Services reach each other by service name (nest -> apex:8001), not
@@ -30,11 +32,23 @@
 # already used for `livekit`. This means bare `docker compose up -d` now only
 # starts infra (redis/keycloak/elasticmq/minio) — nothing is implicitly built
 # either, since profile filtering applies to `build` too. Use `./start.sh`
-# (which passes the right `--profile` flags per services.conf) or
+# (which passes the right `--profile` flags from START_* env vars) or
 # `./configure.sh` to pick a subset interactively; naming a service explicitly
 # on the CLI (`docker compose up -d nest`) still bypasses profile filtering as
-# usual. All six are still cloned/built into the one shared image regardless
-# of selection — see services.conf.example.
+# usual.
+#
+# INDEPENDENT BUILDS: `nest` and `frontend` build from their OWN repo's
+# Dockerfile (algojob_nest/Dockerfile, algojobs_frontend/Dockerfile) — NOT the
+# shared algojob-stack image. `docker compose build nest frontend` therefore
+# only needs those two repos cloned, and only rebuilds when their own source
+# changes. The other four (algojobs-service, apex, personalized, agent-server)
+# still share one image (algojob-stack:latest) built from the root Dockerfile,
+# which — for the all-in-one-image deploy case — also separately bundles its
+# own copies of nest+frontend's source; that's unchanged and unrelated to the
+# nest/frontend services below. So: cloning just algojob_nest +
+# algojobs_frontend is enough to build/run `nest`+`frontend` here, but running
+# any of the other four still requires every repo cloned (clone.sh --list
+# marks which repos are required for the shared image).
 
 x-app: &app
   build:
@@ -264,10 +278,17 @@ services:
       - '8070:8070'
 
   nest:
-    <<: *app
+    # Own build, NOT the shared algojob-stack image — see the "independent
+    # builds" note near the top of this file. Uses algojob_nest's own
+    # Dockerfile (node:22-alpine, WORKDIR /app, CMD node dist/main), so
+    # `docker compose build nest` only needs the algojob_nest repo cloned.
+    build:
+      context: ./algojob_nest
+      dockerfile: Dockerfile
+    image: algojob-nest:latest
+    restart: unless-stopped
     profiles: ['nest']
     container_name: algojob-nest
-    working_dir: /app/nest
     command: node dist/main
     env_file: ./algojob_nest/.env
     environment:
@@ -277,7 +298,6 @@ services:
       # placeholder secrets ("change-me-in-production"). That guard is
       # intentional — a real deploy must set real secrets and use production.
       NODE_ENV: ${NEST_NODE_ENV:-development}
-      TLS_CA_FILE: /app/global-bundle.pem
       REDIS_HOST: redis
       REDIS_PORT: '6379'
       REDIS_PASSWORD: ''
@@ -311,11 +331,20 @@ services:
       - '5001:5001'
 
   frontend:
-    <<: *app
+    # Own build, NOT the shared algojob-stack image — see the "independent
+    # builds" note near the top of this file. Uses algojobs_frontend's own
+    # Dockerfile (node:20-alpine, WORKDIR /app, CMD ./startup.sh — its own
+    # __TOKEN__ rewrite script, equivalent to docker/frontend-entry.sh), so
+    # `docker compose build frontend` only needs the algojobs_frontend repo
+    # cloned, and only rebuilds when frontend source actually changes.
+    build:
+      context: ./algojobs_frontend
+      dockerfile: Dockerfile
+    image: algojob-frontend:latest
+    restart: unless-stopped
     profiles: ['frontend']
     container_name: algojob-frontend
-    working_dir: /app/frontend
-    command: /usr/local/bin/frontend-entry.sh
+    command: ./startup.sh
     env_file: ./algojobs_frontend/.env
     environment:
       NODE_ENV: production

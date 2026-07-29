@@ -30,8 +30,7 @@ time you run it. See [Selective services](#selective-services) below.
 ## Build + run (full stack)
 
 ```bash
-./start.sh --build         # build the shared image (always builds all 6 app services —
-                            # see "Selective services" below for why)
+./start.sh --build         # build the selected app services (default: all)
 ./start.sh                 # containers + native LiveKit (Ctrl-C stops LiveKit only)
 ./start.sh --no-livekit    # containers only
 ./start.sh --down          # stop containers
@@ -53,32 +52,45 @@ by env vars (`START_APEX`, `START_NEST`, `START_FRONTEND`, `START_ALGOJOBS_SERVI
 invocation without an explicit override starts everything.
 
 Note: `frontend` depends on `nest` at the Compose level, so enabling `frontend` always
-enables `nest` too (`configure.sh`/`start.sh` do this automatically; disabling `nest`
-while leaving `frontend` on isn't a valid combination — Compose would refuse to start).
+enables `nest` too (`configure.sh`/`start.sh` do this automatically for both cloning and
+starting; disabling `nest` while leaving `frontend` on isn't a valid combination —
+Compose refuses even to resolve the config, let alone start).
 
-`clone.sh` works the same way for which repos to clone, via `CLONE_AGENT_SERVER`,
-`CLONE_ALGOJOBS_SERVICE`, `CLONE_NEST`, `CLONE_FRONTEND`, `CLONE_APEX`,
-`CLONE_PERSONALIZED`, `CLONE_PROCTORING`. **Six of the seven repos are built into the one
-shared Docker image**, so declining to clone any of those breaks `docker compose build`
-outright, even for repos you didn't decline (`clone.sh --list` marks which ones are
-required; `configure.sh` warns inline if you decline one). Only
-`algojob-proctoring-mise` (native-only, already excluded from the Docker build for arch
-reasons) is genuinely safe to skip.
+**`nest` and `frontend` build independently** — each has its own `Dockerfile` in its own
+repo (`algojob_nest/Dockerfile`, `algojobs_frontend/Dockerfile`), separate from the
+shared image the other four use. That means:
+- `docker compose build nest frontend` only needs those two repos cloned — the other
+  four (`algojobs-service`, `apex`, `personalized`, `agent-server`) aren't touched.
+- Editing frontend code and running `docker compose build frontend nest` only rebuilds
+  frontend's layers (nest is cache-fast once built once) — it never rebuilds the shared
+  image or requires the other four repos to exist.
+- The other four still share **one** image (`algojob-stack:latest`) built from the root
+  `Dockerfile`, which unconditionally needs all four of *those* repos present —
+  declining any one of them breaks `docker compose build` for all four, even the ones
+  you didn't decline.
+
+`clone.sh` mirrors this via `CLONE_AGENT_SERVER`, `CLONE_ALGOJOBS_SERVICE`,
+`CLONE_NEST`, `CLONE_FRONTEND`, `CLONE_APEX`, `CLONE_PERSONALIZED`, `CLONE_PROCTORING`
+(`clone.sh --list` marks which repos are required for what; `configure.sh` warns inline
+per-repo). Only `algojob-proctoring-mise` (native-only, excluded from the Docker build
+entirely) is unconditionally safe to skip.
 
 ## Build + run a single service only
 
 ```bash
-docker compose build <service>
-docker compose up -d <service>
+docker compose build <service> [<service> ...]
+docker compose up -d <service> [<service> ...]
 ```
 
 `<service>`: `frontend` `nest` `apex` `personalized` `agent-server` `algojobs-service` `elasticmq` `redis` `keycloak` `minio`
 
-Only rebuilds/recreates that one container — the rest of the stack keeps running.
-Naming a service explicitly here bypasses profile filtering, so this always works
-regardless of `START_*` env vars (`frontend` still needs `nest` running, though —
-Compose won't auto-start a profile-gated dependency just because you named the
-dependent service).
+Only rebuilds/recreates the named container(s) — the rest of the stack keeps running.
+Naming a service explicitly bypasses profile filtering, so this always works regardless
+of `START_*` env vars — **except** `frontend` depends on `nest` structurally
+(`depends_on` in `docker-compose.yml`), so `docker compose build frontend` /
+`up -d frontend` *alone* fails with `no such service: nest`; you always need
+`docker compose build frontend nest` / `up -d frontend nest` together (Compose
+validates the dependency graph the same way for `build` as it does for `up`).
 
 ## LiveKit: Cloud vs native
 

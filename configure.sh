@@ -7,12 +7,15 @@
 #
 #   ./configure.sh
 #
-# WARNING: six of the seven repos are built into one shared Docker image (see
-# Dockerfile) — declining to clone any of THOSE means `docker compose build`
-# fails outright on its COPY step, even for repos you didn't decline. This
-# script warns inline if you do; it's your call (e.g. you already have it
-# checked out elsewhere, or you're native-dev-only and don't plan to build the
-# Docker image at all).
+# WARNING: algojob-agent-server, algojobs_service, algoapex-microservice, and
+# Algojob-debug-mise are built into one shared Docker image (see Dockerfile)
+# — declining to clone any of THOSE breaks `docker compose build` outright,
+# even for repos you didn't decline. algojob_nest and algojobs_frontend each
+# build from their own Dockerfile instead (docker-compose.yml's "INDEPENDENT
+# BUILDS" note), so declining one of those only affects that one service —
+# e.g. you can clone/build/start just nest + frontend without the other four
+# at all. Only algojob-proctoring-mise (native-only) is always safe to skip
+# with zero build-time consequences. This script warns inline per-repo.
 set -uo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -30,10 +33,11 @@ REPOS=(
 )
 
 echo "AlgoJob setup — clone selection"
-echo "Six of these seven repos are built into one shared Docker image regardless"
-echo "of which containers you plan to start, so declining one of those breaks"
-echo "'docker compose build' entirely. Only proctoring (native-only) is always safe"
-echo "to skip."
+echo "agent-server, algojobs-service, apex, and personalized share ONE Docker image"
+echo "— declining any of those breaks 'docker compose build' entirely, even for"
+echo "repos you keep. nest and frontend each build independently (their own"
+echo "Dockerfile), so you can clone/build/run just those two on their own. Only"
+echo "proctoring (native-only) is always safe to skip."
 echo
 
 for entry in "${REPOS[@]}"; do
@@ -47,13 +51,23 @@ for entry in "${REPOS[@]}"; do
     y|Y) printf -v "$var" '1' ;;
     *)
       printf -v "$var" '0'
-      if [ "$required" = "1" ]; then
+      if [ "$folder" = "algojob_nest" ] || [ "$folder" = "algojobs_frontend" ]; then
+        echo "  NOTE: this only breaks building/starting $label itself — the other"
+        echo "  services aren't affected (it builds from its own Dockerfile)."
+      elif [ "$required" = "1" ]; then
         echo "  WARNING: this repo is required for the shared Docker image build —"
-        echo "  'docker compose build' / './start.sh --build' will fail without it."
+        echo "  'docker compose build' / './start.sh --build' will fail without it,"
+        echo "  even for services you didn't decline."
       fi
       ;;
   esac
 done
+
+if [ "${CLONE_FRONTEND}" = "1" ] && [ "${CLONE_NEST}" != "1" ]; then
+  echo
+  echo "frontend's build depends on nest at the compose level too — cloning nest too."
+  CLONE_NEST=1
+fi
 
 echo
 echo "Which services should ./start.sh actually launch (Docker only — doesn't"
