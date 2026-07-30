@@ -19,14 +19,14 @@ LOG_DIR="$ROOT_DIR/logs"
 # Every service dir has its own top-level run script — dev.sh just calls it.
 # Run a single service by hand the exact same way: cd <dir> && ./<script>.
 SERVICES=(
-  "livekit      |livekit-local                                              |./run-livekit.sh"
-  "proctoring   |algojob-proctoring-mise                                    |./run.sh"
-  "algojobsvc   |algojobs_service                                           |./run.sh"
-  "apex         |algoapex-microservice                                      |./run.sh"
-  "personalized |Algojob-debug-mise                                         |./run.sh"
+  # "livekit      |livekit-local                                              |./run-livekit.sh"
+  # "proctoring   |algojob-proctoring-mise                                    |./run.sh"
+  # "algojobsvc   |algojobs_service                                           |./run.sh"
+  # "apex         |algoapex-microservice                                      |./run.sh"
+  # "personalized |Algojob-debug-mise                                         |./run.sh"
   "nest         |algojob_nest                                               |./run.sh"
   "frontend     |algojobs_frontend                                          |./run.sh"
-  "agent        |algojob-agent-server                                       |./run-agent.sh"
+  # "agent        |algojob-agent-server                                       |./run-agent.sh"
 )
 
 COLORS=(31 32 33 34 35 36 91 92 93 94)

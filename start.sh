@@ -1,17 +1,22 @@
 #!/usr/bin/env bash
 # Starts the AlgoJob stack: the selected services in Docker + LiveKit natively.
 #
-#   ./start.sh              containers (detached) + native livekit-server (foreground)
-#   ./start.sh --no-livekit containers only
-#   ./start.sh --build      build the selected app services and exit
-#   ./start.sh --down       stop containers (and this script's livekit, via Ctrl-C)
+#   ./start.sh                       containers (detached) + native livekit-server (foreground)
+#   ./start.sh --only=nest,frontend  just those services (shorthand for setting all six START_* vars)
+#   ./start.sh --no-livekit          containers only
+#   ./start.sh --build               build the selected app services and exit
+#   ./start.sh --down                stop containers (and this script's livekit, via Ctrl-C)
 #
 # Which app services actually start is controlled by env vars (START_APEX,
 # START_NEST, START_FRONTEND, START_ALGOJOBS_SERVICE, START_PERSONALIZED,
 # START_AGENT_SERVER), each defaulting to 1 (start) if unset. No config file
 # is read — this is stateless by design. Run ./configure.sh for an interactive
-# per-service picker (it exports these and calls this script for you), or
-# export them yourself for a one-off: `START_APEX=0 ./start.sh`.
+# per-service picker (it exports these and calls this script for you), export
+# them yourself for a one-off (`START_APEX=0 ./start.sh`), or pass --only=
+# with a comma-separated list of: algojobs-service, apex, personalized, nest,
+# frontend, agent-server — e.g. `./start.sh --only=nest,frontend` starts
+# exactly those two (and turns every other service off, overriding whatever
+# the START_* env vars say).
 # Infra (redis/keycloak/elasticmq/minio) always starts regardless of selection.
 #
 # LiveKit is the one service left outside Docker. It advertises a single IP as
@@ -29,6 +34,48 @@ set -uo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$ROOT_DIR"
+
+no_livekit=false
+do_down=false
+do_build=false
+only_services=""
+for arg in "$@"; do
+  case "$arg" in
+    --no-livekit) no_livekit=true ;;
+    --down) do_down=true ;;
+    --build) do_build=true ;;
+    --only=*) only_services="${arg#--only=}" ;;
+    *) echo "Unknown flag: $arg (expected --only=<list>, --no-livekit, --build, or --down)" >&2; exit 1 ;;
+  esac
+done
+
+# --only=... is shorthand that overrides the START_* env vars wholesale: it
+# turns every service off, then flips on just the ones named. This has to
+# happen BEFORE the `: "${VAR:=1}"` defaulting below, since that defaulting
+# only fires on an unset var — an --only-driven "0" must win over it.
+if [ -n "$only_services" ]; then
+  START_ALGOJOBS_SERVICE=0
+  START_APEX=0
+  START_PERSONALIZED=0
+  START_NEST=0
+  START_FRONTEND=0
+  START_AGENT_SERVER=0
+  IFS=',' read -ra selected <<<"$only_services"
+  for s in "${selected[@]}"; do
+    case "$s" in
+      algojobs-service) START_ALGOJOBS_SERVICE=1 ;;
+      apex) START_APEX=1 ;;
+      personalized) START_PERSONALIZED=1 ;;
+      nest) START_NEST=1 ;;
+      frontend) START_FRONTEND=1 ;;
+      agent-server) START_AGENT_SERVER=1 ;;
+      *)
+        echo "Unknown service in --only: '$s' (expected: algojobs-service, apex, personalized, nest, frontend, agent-server)" >&2
+        exit 1
+        ;;
+    esac
+  done
+fi
 
 : "${START_ALGOJOBS_SERVICE:=1}"
 : "${START_APEX:=1}"
@@ -64,18 +111,6 @@ profile_flags=()
 [ "$START_NEST" = "1" ] && profile_flags+=(--profile nest)
 [ "$START_FRONTEND" = "1" ] && profile_flags+=(--profile frontend)
 [ "$START_AGENT_SERVER" = "1" ] && profile_flags+=(--profile agent-server)
-
-no_livekit=false
-do_down=false
-do_build=false
-for arg in "$@"; do
-  case "$arg" in
-    --no-livekit) no_livekit=true ;;
-    --down) do_down=true ;;
-    --build) do_build=true ;;
-    *) echo "Unknown flag: $arg (expected --no-livekit, --build, or --down)" >&2; exit 1 ;;
-  esac
-done
 
 if $do_build; then
   echo "Building (${profile_flags[*]:-infra only, nothing to build})..."
