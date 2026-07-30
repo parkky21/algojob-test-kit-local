@@ -110,7 +110,16 @@ fi
 mkdir -p "$LOG_DIR"
 : > "$LOG_DIR/.gitkeep"
 
-trap 'echo; echo "Stopping all services..."; kill 0' INT TERM EXIT
+cleanup() {
+  # Disarm immediately so kill 0 below (which signals this process too)
+  # can't re-enter this handler, and so the later natural EXIT doesn't
+  # print a second time.
+  trap '' INT TERM EXIT
+  echo
+  echo "Stopping all services..."
+  kill 0 2>/dev/null
+}
+trap cleanup INT TERM EXIT
 
 idx=0
 for entry in "${SERVICES[@]}"; do
@@ -128,6 +137,7 @@ for entry in "${SERVICES[@]}"; do
   if ! in_filter "$name"; then
     echo "Starting $name in background, not streaming (not in filter: ${service_filter[*]})"
     (
+      trap - INT TERM EXIT
       cd "$ROOT_DIR/$dir" || exit 1
       eval "$cmd"
     ) >>"$LOG_DIR/$name.log" 2>&1 &
@@ -138,6 +148,7 @@ for entry in "${SERVICES[@]}"; do
   if $quiet; then
     echo "Starting $name  ($dir  ->  $cmd)  [quiet: logging to $LOG_DIR/$name.log only]"
     (
+      trap - INT TERM EXIT
       cd "$ROOT_DIR/$dir" || exit 1
       eval "$cmd"
     ) 2>&1 \
@@ -146,6 +157,7 @@ for entry in "${SERVICES[@]}"; do
   else
     echo "Starting $name  ($dir  ->  $cmd)"
     (
+      trap - INT TERM EXIT
       cd "$ROOT_DIR/$dir" || exit 1
       eval "$cmd"
     ) 2>&1 \
