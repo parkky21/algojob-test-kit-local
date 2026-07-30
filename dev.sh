@@ -6,10 +6,14 @@
 # come before agent-server, since it registers against both on startup.
 #
 # Usage:
-#   ./dev.sh              start infra (if needed) + all enabled services
-#   ./dev.sh --no-infra   skip the infra preflight (already running)
-#   ./dev.sh --down       stop the shared infra stack and exit
-#   ./dev.sh --list       print which services are enabled/skipped and exit
+#   ./dev.sh                  start infra (if needed) + all enabled services
+#   ./dev.sh nest frontend    only start/stream the named services (still
+#                             writes every enabled service's log to disk)
+#   ./dev.sh --quiet          don't stream any logs to the terminal; just
+#                             write to logs/<service>.log (tail what you need)
+#   ./dev.sh --no-infra       skip the infra preflight (already running)
+#   ./dev.sh --down           stop the shared infra stack and exit
+#   ./dev.sh --list           print which services are enabled/skipped and exit
 set -uo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -23,7 +27,7 @@ SERVICES=(
   # "proctoring   |algojob-proctoring-mise                                    |./run.sh"
   # "algojobsvc   |algojobs_service                                           |./run.sh"
   # "apex         |algoapex-microservice                                      |./run.sh"
-  # "personalized |Algojob-debug-mise                                         |./run.sh"
+  "personalized |Algojob-debug-mise                                         |./run.sh"
   "nest         |algojob_nest                                               |./run.sh"
   "frontend     |algojobs_frontend                                          |./run.sh"
   # "agent        |algojob-agent-server                                       |./run-agent.sh"
@@ -35,17 +39,33 @@ INFRA_CONTAINERS=(algojob-infra-redis algojob-infra-keycloak algojob-infra-elast
 do_list=false
 do_down=false
 no_infra=false
+quiet=false
+service_filter=()
 for arg in "$@"; do
   case "$arg" in
     --list) do_list=true ;;
     --down) do_down=true ;;
     --no-infra) no_infra=true ;;
-    *)
-      echo "Unknown flag: $arg (expected --list, --down, or --no-infra)" >&2
+    --quiet|-q) quiet=true ;;
+    --*)
+      echo "Unknown flag: $arg (expected --list, --down, --no-infra, or --quiet)" >&2
       exit 1
+      ;;
+    *)
+      service_filter+=("$arg")
       ;;
   esac
 done
+
+in_filter() {
+  local name="$1"
+  [ ${#service_filter[@]} -eq 0 ] && return 0
+  local f
+  for f in "${service_filter[@]}"; do
+    [ "$f" = "$name" ] && return 0
+  done
+  return 1
+}
 
 if $do_list; then
   echo "Enabled services (edit the SERVICES array in dev.sh to change):"
@@ -105,20 +125,44 @@ for entry in "${SERVICES[@]}"; do
     continue
   fi
 
-  echo "Starting $name  ($dir  ->  $cmd)"
-  (
-    cd "$ROOT_DIR/$dir" || exit 1
-    eval "$cmd"
-  ) 2>&1 \
-    | awk -v prefix="[$name] " -v color="$color" \
-        '{ printf "\033[%sm%s%s\033[0m\n", color, prefix, $0; fflush() }' \
-    | tee -a "$LOG_DIR/$name.log" &
+  if ! in_filter "$name"; then
+    echo "Starting $name in background, not streaming (not in filter: ${service_filter[*]})"
+    (
+      cd "$ROOT_DIR/$dir" || exit 1
+      eval "$cmd"
+    ) >>"$LOG_DIR/$name.log" 2>&1 &
+    sleep 1.5
+    continue
+  fi
+
+  if $quiet; then
+    echo "Starting $name  ($dir  ->  $cmd)  [quiet: logging to $LOG_DIR/$name.log only]"
+    (
+      cd "$ROOT_DIR/$dir" || exit 1
+      eval "$cmd"
+    ) 2>&1 \
+      | awk -v prefix="[$name] " '{ print prefix $0; fflush() }' \
+      >>"$LOG_DIR/$name.log" &
+  else
+    echo "Starting $name  ($dir  ->  $cmd)"
+    (
+      cd "$ROOT_DIR/$dir" || exit 1
+      eval "$cmd"
+    ) 2>&1 \
+      | awk -v prefix="[$name] " -v color="$color" \
+          '{ printf "\033[%sm%s%s\033[0m\n", color, prefix, $0; fflush() }' \
+      | tee -a "$LOG_DIR/$name.log" &
+  fi
 
   sleep 1.5
 done
 
 echo
 echo "All enabled services launched. Logs are also written to $LOG_DIR/<service>.log"
+if $quiet || [ ${#service_filter[@]} -gt 0 ]; then
+  echo "Not streaming everything to this terminal — tail what you need, e.g.:"
+  echo "  tail -f $LOG_DIR/<service>.log"
+fi
 echo "Press Ctrl-C to stop everything (infra is left running — use ./dev.sh --down to stop it)."
 echo
 
