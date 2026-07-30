@@ -121,6 +121,46 @@ cleanup() {
 }
 trap cleanup INT TERM EXIT
 
+# Neither npm nor uv services install themselves — if deps look missing or
+# stale, install/sync before starting.
+ensure_deps() {
+  local dir="$ROOT_DIR/$1"
+
+  if [ -f "$dir/package.json" ]; then
+    local marker="$dir/node_modules"
+    local need_install=false
+    if [ ! -d "$marker" ]; then
+      need_install=true
+    elif [ "$dir/package.json" -nt "$marker" ]; then
+      need_install=true
+    elif [ -f "$dir/package-lock.json" ] && [ "$dir/package-lock.json" -nt "$marker" ]; then
+      need_install=true
+    fi
+
+    if $need_install; then
+      echo "Installing npm dependencies in $1..."
+      (cd "$dir" && npm i) || { echo "npm i failed in $1" >&2; exit 1; }
+    fi
+  fi
+
+  if [ -f "$dir/pyproject.toml" ]; then
+    local venv="$dir/.venv"
+    local need_sync=false
+    if [ ! -d "$venv" ]; then
+      need_sync=true
+    elif [ "$dir/pyproject.toml" -nt "$venv" ]; then
+      need_sync=true
+    elif [ -f "$dir/uv.lock" ] && [ "$dir/uv.lock" -nt "$venv" ]; then
+      need_sync=true
+    fi
+
+    if $need_sync; then
+      echo "Creating/syncing uv environment in $1..."
+      (cd "$dir" && uv sync) || { echo "uv sync failed in $1" >&2; exit 1; }
+    fi
+  fi
+}
+
 idx=0
 for entry in "${SERVICES[@]}"; do
   name="$(cut -d'|' -f1 <<<"$entry" | xargs)"
@@ -133,6 +173,8 @@ for entry in "${SERVICES[@]}"; do
     echo "Skipping $name — directory not found: $dir" >&2
     continue
   fi
+
+  ensure_deps "$dir"
 
   if ! in_filter "$name"; then
     echo "Starting $name in background, not streaming (not in filter: ${service_filter[*]})"
