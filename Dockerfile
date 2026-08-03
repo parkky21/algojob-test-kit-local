@@ -18,7 +18,7 @@
 # from the CWD, so a file there would be picked up by every Python service and
 # silently override their individual configs.
 #
-# ARCHITECTURE: builds on both arm64 and x86_64. algojob-proctoring-mise — the one
+# ARCHITECTURE: builds on both arm64 and x86_64. interview-proctoring — the one
 # service that forced x86_64, via mediapipe's missing ARM64 wheel — is excluded
 # (see the note in the py-build stage). Re-adding it re-imposes x86_64-only.
 
@@ -77,17 +77,17 @@ WORKDIR /app
 COPY algojob-agent-server/pyproject.toml algojob-agent-server/uv.lock agent_server/
 RUN cd agent_server && uv sync --frozen --no-install-project --no-dev
 
-COPY algojobs_service/pyproject.toml algojobs_service/uv.lock algojobs_service/
+COPY interview_manager/pyproject.toml interview_manager/uv.lock algojobs_service/
 RUN cd algojobs_service && uv sync --frozen --no-install-project --no-dev
 
-COPY algoapex-microservice/pyproject.toml algoapex-microservice/uv.lock apex/
+COPY apex-assessment/pyproject.toml apex-assessment/uv.lock apex/
 RUN cd apex && uv sync --frozen --no-install-project --no-dev
 
-COPY Algojob-debug-mise/pyproject.toml \
-     Algojob-debug-mise/uv.lock personalized/
+COPY debug-assessment/pyproject.toml \
+     debug-assessment/uv.lock personalized/
 RUN cd personalized && uv sync --frozen --no-install-project --no-dev
 
-# NOTE: algojob-proctoring-mise is intentionally NOT included. It depends on
+# NOTE: interview-proctoring is intentionally NOT included. It depends on
 # mediapipe, which publishes no Linux ARM64 wheel, and was the only thing
 # forcing this image to linux/amd64. To add it back, restore the dependency +
 # source layers and the runtime COPY for `proctoring/`, re-add its supervisord
@@ -98,13 +98,13 @@ RUN cd personalized && uv sync --frozen --no-install-project --no-dev
 COPY algojob-agent-server/ agent_server/
 RUN cd agent_server && uv sync --frozen --no-dev
 
-COPY algojobs_service/ algojobs_service/
+COPY interview_manager/ algojobs_service/
 RUN cd algojobs_service && uv sync --frozen --no-dev
 
-COPY algoapex-microservice/ apex/
+COPY apex-assessment/ apex/
 RUN cd apex && uv sync --frozen --no-dev
 
-COPY Algojob-debug-mise/ personalized/
+COPY debug-assessment/ personalized/
 RUN cd personalized && uv sync --frozen --no-dev
 
 # Pre-download the agent's Silero VAD + turn-detector models. main.py loads VAD
@@ -128,7 +128,7 @@ RUN curl -sS https://truststore.pki.rds.amazonaws.com/global/global-bundle.pem \
 FROM python:3.12-slim-bookworm
 
 # libgl1/libglib2.0-0 (the OpenCV/MediaPipe runtime deps) are omitted along
-# with algojob-proctoring-mise. Compilers are deliberately not carried over.
+# with interview-proctoring. Compilers are deliberately not carried over.
 RUN apt-get update && apt-get install -y --no-install-recommends \
       ca-certificates \
       curl \

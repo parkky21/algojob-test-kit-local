@@ -21,9 +21,9 @@
 # See docker-compose.host.yml for the Linux deploy overlay that switches to host
 # networking — worth it for LiveKit's WebRTC media path (see the livekit notes).
 #
-# NOT INCLUDED: algojob-proctoring-mise. Its mediapipe dependency ships no Linux
+# NOT INCLUDED: interview-proctoring. Its mediapipe dependency ships no Linux
 # ARM64 wheel. Run it natively alongside
-# (cd algojob-proctoring-mise && ./run.sh), or see the
+# (cd interview-proctoring && ./run.sh), or see the
 # Dockerfile note to build it in — which makes the image x86_64-only.
 #
 # SELECTIVE START: the six app services below (algojobs-service, apex,
@@ -86,7 +86,7 @@ services:
       KC_HOSTNAME_STRICT: 'false'
       KC_HOSTNAME_STRICT_HTTPS: 'false'
     # Internally 8080 (nest reaches it at http://keycloak:8080); published on
-    # 8180 because algojob-proctoring-mise owns 8080 when run natively.
+    # 8180 because interview-proctoring owns 8080 when run natively.
     ports:
       - '8180:8080'
     volumes:
@@ -204,7 +204,7 @@ services:
     container_name: algojob-algojobs-service
     working_dir: /app/algojobs_service
     command: /app/algojobs_service/.venv/bin/uvicorn main:app --host 0.0.0.0 --port 8000
-    env_file: ./algojobs_service/.env
+    env_file: ./interview_manager/.env
     environment:
       LOG_LEVEL: INFO
       # LiveKit config comes from the repo-root .env so Cloud vs local-native is
@@ -216,7 +216,7 @@ services:
       LIVEKIT_API_KEY: ${LIVEKIT_API_KEY:-}
       LIVEKIT_API_SECRET: ${LIVEKIT_API_SECRET:-}
       REDIS_URL: redis://redis:6379/0
-      # algojob-proctoring-mise isn't in this stack; the value must be non-empty
+      # interview-proctoring isn't in this stack; the value must be non-empty
       # (configs.py fails fast at import if it is) but nothing will answer it.
       PROCTOR_API_URL: ws://proctoring:8080/ws/proctor
     extra_hosts:
@@ -233,7 +233,7 @@ services:
     container_name: algojob-apex
     working_dir: /app/apex
     command: /app/apex/.venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8001
-    env_file: ./algoapex-microservice/.env
+    env_file: ./apex-assessment/.env
     environment:
       LOG_LEVEL: INFO
       # apex's .env sets ENABLE_CRON_JOB=false; kept explicit because the daily
@@ -243,13 +243,18 @@ services:
       # containers are needed.
       RUN_CONSUMERS: 'true'
       SQS_ENDPOINT_URL: http://elasticmq:9324
-      # MinIO stands in for S3 (audio uploads), so the AWS creds ARE dummied
-      # now (they were previously kept real because S3 was real). MinIO
-      # validates signatures, so these must match MINIO_ROOT_USER/PASSWORD;
-      # ElasticMQ doesn't validate at all, so the same dummies work for SQS too.
+      # MinIO stands in for S3 (audio uploads). AWS_ACCESS_KEY_ID/SECRET keep
+      # meaning "real AWS" (used for SQS against ElasticMQ, which doesn't
+      # validate signatures, so any value works) — the MinIO client gets its
+      # own creds via S3_ENDPOINT_ACCESS_KEY_ID/SECRET, which MUST match
+      # MINIO_ROOT_USER/PASSWORD since MinIO does validate signatures.
+      # scripts/sync-audio-to-minio.sh seeds MinIO with a copy of the real
+      # question audio so Neon's audio_url rows resolve locally without any
+      # code path ever touching the real bucket.
       S3_ENDPOINT_URL: http://minio:9000
-      AWS_ACCESS_KEY_ID: ${MINIO_ROOT_USER:-minioadmin}
-      AWS_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin}
+      S3_ENDPOINT_ACCESS_KEY_ID: ${MINIO_ROOT_USER:-minioadmin}
+      S3_ENDPOINT_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin}
+      S3_LOCAL_ONLY: 'true'
       SQS_USER_SIGNUP_URL: http://elasticmq:9324/000000000000/algoapex-user-signup.fifo
       SQS_TEST_COMPLETED_URL: http://elasticmq:9324/000000000000/algoapex-test-completed.fifo
       SQS_EVALUATION_COMPLETED_URL: http://elasticmq:9324/000000000000/algoapex-evaluation-completed.fifo
@@ -268,7 +273,7 @@ services:
     container_name: algojob-personalized
     working_dir: /app/personalized
     command: /app/personalized/.venv/bin/uvicorn main:app --host 0.0.0.0 --port 8070
-    env_file: ./Algojob-debug-mise/.env
+    env_file: ./debug-assessment/.env
     environment:
       LOG_LEVEL: INFO
       # Explicit because this service DEFAULTS this to true when unset, unlike
@@ -306,15 +311,16 @@ services:
       PYTHON_PERSONALIZED_SERVICE: http://personalized:8070
       ALGOAPEX_API_URL: http://apex:8001/v1
       SQS_ENDPOINT_URL: http://elasticmq:9324
-      # MinIO stands in for S3 — creds dummied, see the note on apex.
+      # MinIO stands in for S3 — creds split, see the note on apex.
       S3_ENDPOINT_URL: http://minio:9000
       # Browser-resolved (presigned audio URLs are fetched by the user's
       # browser, like API_BASE_URL on frontend) -> must be reachable from the
       # user's machine, not container DNS. Signatures cover the Host header, so
       # presigning happens against this endpoint while uploads use the one above.
       S3_PUBLIC_ENDPOINT_URL: ${PUBLIC_S3_ENDPOINT_URL:-http://localhost:9000}
-      AWS_ACCESS_KEY_ID: ${MINIO_ROOT_USER:-minioadmin}
-      AWS_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin}
+      S3_ENDPOINT_ACCESS_KEY_ID: ${MINIO_ROOT_USER:-minioadmin}
+      S3_ENDPOINT_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin}
+      S3_LOCAL_ONLY: 'true'
       SQS_USER_SIGNUP_URL: http://elasticmq:9324/000000000000/algoapex-user-signup.fifo
       SQS_TEST_COMPLETED_URL: http://elasticmq:9324/000000000000/algoapex-test-completed.fifo
       SQS_EVALUATION_COMPLETED_URL: http://elasticmq:9324/000000000000/algoapex-evaluation-completed.fifo

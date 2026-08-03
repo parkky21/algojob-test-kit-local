@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Clones (or updates) the AlgoJob service repos into this directory, each into
-# a folder matching its repo name.
+# a folder matching its (current) repo name.
 #
 #   ./clone.sh                 clone/update the selected repos, each on its default branch
 #   ./clone.sh local-run       override the branch for every repo that has one
@@ -13,10 +13,10 @@
 # interactive per-repo picker (it exports these and calls this script for you),
 # or export them yourself for a one-off: `CLONE_PROCTORING=0 ./clone.sh`.
 #
-# WARNING: four of the seven repos (algojob-agent-server, algojobs_service,
-# algoapex-microservice, Algojob-debug-mise) are built into one shared Docker
-# image (see Dockerfile) — skipping any of THOSE (marked "required" in --list
-# / SERVICES below) means `docker compose build` fails outright on its COPY
+# WARNING: four of the seven repos (algojob-agent-server, interview_manager,
+# apex-assessment, debug-assessment) are built into one shared Docker image
+# (see Dockerfile) — skipping any of THOSE (marked "required" in --list /
+# SERVICES below) means `docker compose build` fails outright on its COPY
 # step, even for services you didn't skip.
 #
 # algojob_nest and algojobs_frontend are ALSO marked required, but for a
@@ -28,7 +28,7 @@
 # skipping them still blocks that path too — but not the other 4 services'
 # individual containers.)
 #
-# Only algojob-proctoring-mise (native-only, excluded from the Docker build
+# Only interview-proctoring (native-only, excluded from the Docker build
 # entirely) is safe to skip freely with no build-time consequences.
 set -uo pipefail
 
@@ -37,19 +37,62 @@ cd "$ROOT_DIR"
 
 ORG="https://github.com/algorootprod"
 
-# repo (= folder name)|default-branch|CLONE_* env var|required-for-docker-build(1/0)
+# folder (= repo name)|default-branch|CLONE_* env var|required-for-docker-build(1/0)
 # algojob-proctoring-mise and Algojob-debug-mise were split out of the old
 # algojob_microservice_python monorepo (see git history there) into their
 # own repos; those only have `main`, not `local-run`.
 SERVICES=(
   "algojob-agent-server|local-run|CLONE_AGENT_SERVER|1"
-  "algojobs_service|local-run|CLONE_ALGOJOBS_SERVICE|1"
+  "interview_manager|local-run|CLONE_ALGOJOBS_SERVICE|1"
   "algojob_nest|local-run|CLONE_NEST|1"
   "algojobs_frontend|local-run|CLONE_FRONTEND|1"
-  "algoapex-microservice|local-run|CLONE_APEX|1"
-  "algojob-proctoring-mise|main|CLONE_PROCTORING|0"
-  "Algojob-debug-mise|main|CLONE_PERSONALIZED|1"
+  "apex-assessment|local-run|CLONE_APEX|1"
+  "interview-proctoring|main|CLONE_PROCTORING|0"
+  "debug-assessment|main|CLONE_PERSONALIZED|1"
 )
+
+# The GitHub repos above were renamed on 2026-08-03 (org: algorootprod).
+# Anyone with a pre-rename checkout has these old folders lying around
+# instead. Before cloning, offer to delete each old folder so the repo can
+# be freshly cloned under its new name — everything downstream (Dockerfile,
+# docker-compose.yml, dev.sh, configure.sh, RUNBOOK.md) now expects the new
+# folder names, so leaving an old one in place just means that service gets
+# skipped below.
+#   old name                -> new name
+#   algoapex-microservice    -> apex-assessment
+#   Algojob-debug-mise       -> debug-assessment
+#   algojobs_service         -> interview_manager
+#   algojob-proctoring-mise  -> interview-proctoring
+LEGACY_RENAMES=(
+  "algoapex-microservice|apex-assessment"
+  "Algojob-debug-mise|debug-assessment"
+  "algojobs_service|interview_manager"
+  "algojob-proctoring-mise|interview-proctoring"
+)
+
+for entry in "${LEGACY_RENAMES[@]}"; do
+  IFS='|' read -r old_name new_name <<<"$entry"
+  [ -d "$old_name/.git" ] || continue
+  [ -d "$new_name/.git" ] && continue # already migrated
+
+  echo "'$old_name' has been renamed to '$new_name' on GitHub."
+  if [ -t 0 ]; then
+    read -r -p "Delete local '$old_name' so it can be re-cloned as '$new_name'? [y/N] " ans
+  else
+    ans="n"
+    echo "(no terminal attached, defaulting to 'n' — re-run interactively to delete it)"
+  fi
+  case "$ans" in
+    y|Y)
+      rm -rf "$old_name"
+      echo "Deleted '$old_name'."
+      ;;
+    *)
+      echo "Keeping '$old_name' as-is — '$new_name' will be skipped below until you remove it."
+      ;;
+  esac
+  echo
+done
 
 : "${CLONE_AGENT_SERVER:=1}"
 : "${CLONE_ALGOJOBS_SERVICE:=1}"
@@ -60,12 +103,12 @@ SERVICES=(
 : "${CLONE_PERSONALIZED:=1}"
 
 if [ "${1:-}" = "--list" ]; then
-  printf "%-30s %-10s %-9s %s\n" "REPO (= folder)" "BRANCH" "REQUIRED" "STATUS"
+  printf "%-25s %-10s %-9s %s\n" "REPO (= folder)" "BRANCH" "REQUIRED" "STATUS"
   for e in "${SERVICES[@]}"; do
     IFS='|' read -r repo branch var required <<<"$e"
     status="enabled"
     [ "${!var}" != "1" ] && status="skipped ($var=0)"
-    printf "%-30s %-10s %-9s %s\n" "$repo" "$branch" "$([ "$required" = "1" ] && echo yes || echo no)" "$status"
+    printf "%-25s %-10s %-9s %s\n" "$repo" "$branch" "$([ "$required" = "1" ] && echo yes || echo no)" "$status"
   done
   exit 0
 fi

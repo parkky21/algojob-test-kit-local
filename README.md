@@ -13,12 +13,12 @@ Also add `.env` in each service dir (get values from the team secret store):
 
 ```
 algojob-agent-server/.env
-algojobs_service/.env
+interview_manager/.env
 algojob_nest/.env
 algojobs_frontend/.env
-algoapex-microservice/.env
-Algojob-debug-mise/.env
-algojob-proctoring-mise/.env
+apex-assessment/.env
+debug-assessment/.env
+interview-proctoring/.env
 ```
 
 Optional: run `./configure.sh` instead of `./clone.sh` — it interactively asks, repo by
@@ -72,7 +72,7 @@ shared image the other four use. That means:
 `clone.sh` mirrors this via `CLONE_AGENT_SERVER`, `CLONE_ALGOJOBS_SERVICE`,
 `CLONE_NEST`, `CLONE_FRONTEND`, `CLONE_APEX`, `CLONE_PERSONALIZED`, `CLONE_PROCTORING`
 (`clone.sh --list` marks which repos are required for what; `configure.sh` warns inline
-per-repo). Only `algojob-proctoring-mise` (native-only, excluded from the Docker build
+per-repo). Only `interview-proctoring` (native-only, excluded from the Docker build
 entirely) is unconditionally safe to skip.
 
 ## Build + run a single service only
@@ -118,7 +118,7 @@ docker compose up -d --force-recreate agent-server algojobs-service frontend   #
 docker compose ps
 docker compose logs agent-server | grep -o '"url": "[^"]*"' | tail -1   # confirm which LiveKit it's using
 curl localhost:3000/api/config
-curl localhost:8000/health          # algojobs_service
+curl localhost:8000/health          # interview_manager
 curl localhost:8001/v1/health       # apex
 curl localhost:8070/health          # personalized
 curl localhost:5001/health          # nest

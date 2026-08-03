@@ -25,7 +25,7 @@ services:
       KC_HOSTNAME_STRICT: 'false'
       KC_HOSTNAME_STRICT_HTTPS: 'false'
     ports:
-      # Moved off 8080 — algojob-proctoring-mise owns that port natively.
+      # Moved off 8080 — interview-proctoring owns that port natively.
       - '8180:8080'
     volumes:
       - infra_keycloak_data:/opt/keycloak/data

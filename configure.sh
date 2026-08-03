@@ -7,14 +7,14 @@
 #
 #   ./configure.sh
 #
-# WARNING: algojob-agent-server, algojobs_service, algoapex-microservice, and
-# Algojob-debug-mise are built into one shared Docker image (see Dockerfile)
+# WARNING: algojob-agent-server, interview_manager, apex-assessment, and
+# debug-assessment are built into one shared Docker image (see Dockerfile)
 # — declining to clone any of THOSE breaks `docker compose build` outright,
 # even for repos you didn't decline. algojob_nest and algojobs_frontend each
 # build from their own Dockerfile instead (docker-compose.yml's "INDEPENDENT
 # BUILDS" note), so declining one of those only affects that one service —
 # e.g. you can clone/build/start just nest + frontend without the other four
-# at all. Only algojob-proctoring-mise (native-only) is always safe to skip
+# at all. Only interview-proctoring (native-only) is always safe to skip
 # with zero build-time consequences. This script warns inline per-repo.
 set -uo pipefail
 
@@ -24,12 +24,12 @@ cd "$ROOT_DIR"
 # folder|label|CLONE_* var|required-for-docker-build(1/0)|START_* var (empty = not a compose service)
 REPOS=(
   "algojob-agent-server|agent-server — LiveKit interview agent worker|CLONE_AGENT_SERVER|1|START_AGENT_SERVER"
-  "algojobs_service|algojobs-service — AI HR Service (FastAPI)|CLONE_ALGOJOBS_SERVICE|1|START_ALGOJOBS_SERVICE"
+  "interview_manager|algojobs-service — AI HR Service (FastAPI)|CLONE_ALGOJOBS_SERVICE|1|START_ALGOJOBS_SERVICE"
   "algojob_nest|nest — backend API (NestJS)|CLONE_NEST|1|START_NEST"
   "algojobs_frontend|frontend — web UI (Next.js)|CLONE_FRONTEND|1|START_FRONTEND"
-  "algoapex-microservice|apex — AlgoApex assessment (FastAPI + SQS workers)|CLONE_APEX|1|START_APEX"
-  "Algojob-debug-mise|personalized — content generation (FastAPI)|CLONE_PERSONALIZED|1|START_PERSONALIZED"
-  "algojob-proctoring-mise|proctoring — AI exam proctoring (native-only, not in the Docker build)|CLONE_PROCTORING|0|"
+  "apex-assessment|apex — AlgoApex assessment (FastAPI + SQS workers)|CLONE_APEX|1|START_APEX"
+  "debug-assessment|personalized — content generation (FastAPI)|CLONE_PERSONALIZED|1|START_PERSONALIZED"
+  "interview-proctoring|proctoring — AI exam proctoring (native-only, not in the Docker build)|CLONE_PROCTORING|0|"
 )
 
 echo "AlgoJob setup — clone selection"

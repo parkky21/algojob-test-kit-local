@@ -61,14 +61,14 @@ cd livekit-local && ./run-livekit.sh
 cd algojob-agent-server && ./run-agent.sh
 ```
 - No port — outbound worker only (connects to LiveKit, doesn't listen)
-- Requires: `livekit-local` and `algojob-proctoring-mise` already running
+- Requires: `livekit-local` and `interview-proctoring` already running
 - `.env` already correct as-is (`LIVEKIT_URL=ws://localhost:7880`,
   `PROCTOR_API_URL=ws://localhost:8080/ws/proctor`) — nothing to add
 - Check: log line `registered worker` with `"url": "ws://localhost:7880"`
 
-### algojobs_service — AI HR Service (FastAPI)
+### interview_manager — AI HR Service (FastAPI)
 ```bash
-cd algojobs_service && ./run.sh
+cd interview_manager && ./run.sh
 ```
 - Port: **8000**
 - Requires: `infra` up (redis)
@@ -76,9 +76,9 @@ cd algojobs_service && ./run.sh
   `PROCTOR_API_URL=ws://localhost:8080/ws/proctor` — nothing to add
 - Health: `curl localhost:8000/health`
 
-### algoapex-microservice — AlgoApex assessment service (FastAPI + SQS consumers)
+### apex-assessment — AlgoApex assessment service (FastAPI + SQS consumers)
 ```bash
-cd algoapex-microservice && ./run.sh
+cd apex-assessment && ./run.sh
 ```
 - Port: **8001** (from `.env`'s `API_PORT=8001` — `run.sh`/`scripts/run_api.sh` reads it explicitly
   since bash doesn't source `.env` on its own)
@@ -87,24 +87,28 @@ cd algoapex-microservice && ./run.sh
   nothing to add. `RUN_CONSUMERS=true` means this one process also hosts the signup/test-completed
   consumers — no separate worker terminals needed for normal dev.
 - To point audio storage (`AUDIO_STORAGE=s3`) at the local MinIO instead of real AWS S3, set in
-  `.env`: `S3_ENDPOINT_URL=http://localhost:9000`, `AWS_ACCESS_KEY_ID=minioadmin`,
-  `AWS_SECRET_ACCESS_KEY=minioadmin`. Unset `S3_ENDPOINT_URL` (and restore real creds) to go back
-  to real S3 — everything else about the code path is unchanged either way.
+  `.env`: `S3_ENDPOINT_URL=http://localhost:9000`, `S3_ENDPOINT_ACCESS_KEY_ID=minioadmin`,
+  `S3_ENDPOINT_SECRET_ACCESS_KEY=minioadmin`. `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY` keep
+  meaning "real AWS" — leave them as your real (read-only-in-practice) creds, or blank if you don't
+  have any. Unset `S3_ENDPOINT_URL` to go back to real S3 — everything else about the code path is
+  unchanged either way. Set `S3_LOCAL_ONLY=true` alongside the endpoint override as a seatbelt: it
+  makes uploads refuse to run if `S3_ENDPOINT_URL` ever gets unset while this flag is still on,
+  instead of silently writing to the real bucket.
 - Health: `curl localhost:8001/v1/health`
 - Optional standalone workers (only if you need them running outside the API process):
   `./scripts/run_worker.sh signup` / `test_completed` / `cron_consumer`
 
-### Algojob-debug-mise — content generation (FastAPI)
+### debug-assessment — content generation (FastAPI)
 ```bash
-cd Algojob-debug-mise && ./run.sh
+cd debug-assessment && ./run.sh
 ```
 - Port: **8070**
 - Requires: nothing local — only cloud Mongo
 - Health: `curl localhost:8070/health`
 
-### algojob-proctoring-mise — AI exam proctoring (FastAPI + YOLO/MediaPipe)
+### interview-proctoring — AI exam proctoring (FastAPI + YOLO/MediaPipe)
 ```bash
-cd algojob-proctoring-mise && ./run.sh
+cd interview-proctoring && ./run.sh
 ```
 - Port: **8080**
 - Requires: nothing local — only cloud Mongo (`.env`'s `MONGODB_URI` was repointed at the shared
@@ -120,9 +124,11 @@ cd algojob_nest && ./run.sh
 - `.env` already has `REDIS_HOST=localhost`/`REDIS_PORT=6379`, `KEYCLOAK_URL=http://localhost:8180`,
   and the local `SQS_ENDPOINT_URL`/`SQS_*_URL` overrides — nothing to add
 - To point audio storage at the local MinIO instead of real AWS S3, set in `.env`:
-  `S3_ENDPOINT_URL=http://localhost:9000`, `AWS_ACCESS_KEY_ID=minioadmin`,
-  `AWS_SECRET_ACCESS_KEY=minioadmin` (`S3_PUBLIC_ENDPOINT_URL` can be omitted natively — it
-  defaults to `S3_ENDPOINT_URL`, and everything is already `localhost`)
+  `S3_ENDPOINT_URL=http://localhost:9000`, `S3_ENDPOINT_ACCESS_KEY_ID=minioadmin`,
+  `S3_ENDPOINT_SECRET_ACCESS_KEY=minioadmin` (`S3_PUBLIC_ENDPOINT_URL` can be omitted natively — it
+  defaults to `S3_ENDPOINT_URL`, and everything is already `localhost`). `AWS_ACCESS_KEY_ID`/
+  `AWS_SECRET_ACCESS_KEY` keep meaning "real AWS" — see the apex note above; the same
+  `S3_LOCAL_ONLY=true` seatbelt applies here too.
 - Health: `curl localhost:5001/health` — also watch the startup log for the
   `IntegrationConnectivityService` summary (Mongo/Redis/Keycloak/AlgoApex OK/FAIL per integration)
 - One-time manual step: create realm `algo-jobs` in the Keycloak admin console
@@ -146,10 +152,10 @@ cd algojobs_frontend && ./run.sh
 | nest | 5001 |
 | redis (infra) | 6379 |
 | livekit (native) | 7880 / 7881 / 7882 |
-| algojobs_service | 8000 |
+| interview_manager | 8000 |
 | apex | 8001 |
-| Algojob-debug-mise | 8070 |
-| algojob-proctoring-mise | 8080 |
+| debug-assessment | 8070 |
+| interview-proctoring | 8080 |
 | keycloak (infra) | 8180 |
 | elasticmq (infra) | 9324 (+9325 UI) |
 | minio (infra) | 9000 (+9001 console) |
@@ -157,10 +163,10 @@ cd algojobs_frontend && ./run.sh
 ## Health checks
 
 ```bash
-curl localhost:8000/health          # algojobs_service
+curl localhost:8000/health          # interview_manager
 curl localhost:8001/v1/health       # apex
-curl localhost:8070/health          # Algojob-debug-mise
-curl localhost:8080/health          # algojob-proctoring-mise
+curl localhost:8070/health          # debug-assessment
+curl localhost:8080/health          # interview-proctoring
 curl localhost:5001/health          # nest
 curl localhost:3000                 # frontend
 curl localhost:3000/api/config      # confirm livekitUrl is ws://localhost:7880, not a cloud host
@@ -179,6 +185,32 @@ to correctly treat that container's clean exit as success.
 nest's own startup logs also run a connectivity prober (`integration-connectivity.service.ts`)
 that reports OK/SKIP/FAIL for Mongo, Redis, Keycloak, and AlgoApex on boot — the fastest signal
 that wiring is correct.
+
+### Seeding question audio
+
+SVAR question audio (the `repeat_sentence` and `listening_comprehension` TTS clips) is generated by
+apex and its full S3 URL is stored in Neon's `question_bank.audio_url` — that row keeps pointing at
+the real AWS bucket no matter what `S3_ENDPOINT_URL` is set to locally, because it's just a string
+in a remote database. Candidate answer recordings, by contrast, are freshly uploaded by nest on every
+local run and always land in MinIO correctly.
+
+To make question audio playable locally too, run:
+
+```bash
+./scripts/sync-audio-to-minio.sh          # after `minio` and `minio-init` are up
+```
+
+This does a one-way, read-only-on-the-source mirror of the `algoapex/audio/repeat_sentence/` and
+`algoapex/audio/listening_comprehension/` prefixes from the real bucket into the local
+`algojobterraformstate` bucket in MinIO — it works because both buckets share the object keys under
+those prefixes, so an existing `audio_url` row resolves once the same key exists in MinIO. It does
+**not** copy candidate answer recordings (`apex-audio/`, `audio/<user_id>/`) — those are PII and
+already produced locally.
+
+Needs real AWS read credentials (`AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY` in
+`apex-assessment/.env`, or in the environment) and either a local `mc` install or Docker. It's
+a point-in-time snapshot — re-run it whenever new questions are generated (`--newer-than 30d` for an
+incremental pass) or a given question 404s locally. See `--help` for options.
 
 ## Why native for local development
 
@@ -244,7 +276,7 @@ invocation), or export the vars yourself for a one-off:
 (`algojob_nest/Dockerfile`, `algojobs_frontend/Dockerfile`) — not the shared image the
 other four use. Verified: `docker compose build nest frontend` produces
 `algojob-nest:latest` / `algojob-frontend:latest` (never touches `algojob-stack:latest`
-or requires `algojobs_service`/`algoapex-microservice`/`Algojob-debug-mise`/
+or requires `interview_manager`/`apex-assessment`/`debug-assessment`/
 `algojob-agent-server` to be cloned), and running just those two + infra
 (`docker compose --profile nest --profile frontend up -d --wait`) produces a fully
 healthy `nest` + `frontend` reachable at `localhost:5001`/`localhost:3000` exactly as
@@ -262,12 +294,12 @@ auto-enable `nest` whenever `frontend` is selected, for exactly this reason.
 
 `clone.sh` has the matching shape for which repos to clone (`CLONE_AGENT_SERVER`,
 `CLONE_ALGOJOBS_SERVICE`, `CLONE_NEST`, `CLONE_FRONTEND`, `CLONE_APEX`,
-`CLONE_PERSONALIZED`, `CLONE_PROCTORING`). Declining `algojobs_service`/
-`algoapex-microservice`/`Algojob-debug-mise`/`algojob-agent-server` breaks
+`CLONE_PERSONALIZED`, `CLONE_PROCTORING`). Declining `interview_manager`/
+`apex-assessment`/`debug-assessment`/`algojob-agent-server` breaks
 `docker compose build` outright for **all four** of those (shared image), even the ones
 you kept; declining `algojob_nest`/`algojobs_frontend` only affects that one service
 (independent build) — `clone.sh --list` marks which are which, `configure.sh` warns
-inline per-repo. Only `algojob-proctoring-mise` (native-only) is unconditionally safe to
+inline per-repo. Only `interview-proctoring` (native-only) is unconditionally safe to
 skip.
 
 ### Switching LiveKit: Cloud vs local native
@@ -400,7 +432,7 @@ keeps them out of the build). That takes the transfer from ~495MB down to ~160MB
 
 **`.env` files are included on purpose.** They're gitignored, so they exist *only* on your machine —
 but the container mounts them at runtime (they're deliberately never baked into the image). rsync
-over SSH carries them securely. Without them the services will fail to start; `algojobs_service` in
+over SSH carries them securely. Without them the services will fail to start; `interview_manager` in
 particular raises at import if its required vars are missing, so you'll see it immediately.
 
 **On the server:**
@@ -434,7 +466,7 @@ docker compose logs -f algojob
 docker compose ps                                   # all 4 containers healthy
 docker compose ps                                   # all 10 containers up
 
-curl localhost:8000/health        # algojobs_service
+curl localhost:8000/health        # interview_manager
 curl localhost:8001/v1/health     # apex
 curl localhost:8070/health        # personalized-learning
 curl localhost:8080/health        # proctoring
@@ -454,9 +486,9 @@ everything wired up.
 realm once at `http://your-server:8180` (admin/admin by default — change it via `KEYCLOAK_ADMIN` /
 `KEYCLOAK_ADMIN_PASSWORD`).
 
-## algojob-proctoring-mise is NOT in this image
+## interview-proctoring is NOT in this image
 
-The container runs **7 of the 8 services**. `algojob-proctoring-mise` is excluded because it depends on
+The container runs **7 of the 8 services**. `interview-proctoring` is excluded because it depends on
 **mediapipe**, which publishes only `manylinux_2_28_x86_64`, `macosx_11_0_arm64`, and `win_amd64`
 wheels — there is **no Linux ARM64 wheel**, so including it fails the build on Apple Silicon and
 rules out ARM servers (Graviton/Ampere) entirely:
@@ -469,13 +501,13 @@ have a source distribution or wheel for the current platform
 With it excluded the image builds natively on **both arm64 and x86_64**, with no QEMU emulation and
 no `platform:` pin.
 
-**What you lose:** nothing starts on port 8080. `algojobs_service` and `algojob-agent-server` keep
+**What you lose:** nothing starts on port 8080. `interview_manager` and `algojob-agent-server` keep
 `PROCTOR_API_URL=ws://localhost:8080/ws/proctor` in their `.env`, which simply won't answer.
 Proctoring is opt-in per interview (the `proctoring_enabled` job-metadata flag), so non-proctored
 interviews are unaffected — but proctored ones will fail to connect.
 
 **To run proctoring**, either start it natively alongside the container
-(`cd algojob-proctoring-mise && ./run.sh`), or add it back to the image —
+(`cd interview-proctoring && ./run.sh`), or add it back to the image —
 restore its dependency/source layers and runtime `COPY` in the `Dockerfile`, re-add its
 `supervisord.conf` program, and pin `platform: linux/amd64` in `docker-compose.yml`. That last step
 makes the image **x86_64-only**.
@@ -566,4 +598,4 @@ apex and nest's `.env` files have their real AWS SQS values commented out just a
 `SQS_ENDPOINT_URL`/`SQS_*_URL` overrides — swap the comments to point back at production queues if
 you ever need to. `ENABLE_CRON_JOB` in apex's `.env` was also turned off locally (it fires paid LLM
 question-generation on a schedule); run it on demand with
-`./scripts/run_worker.sh cron --now` from `algoapex-microservice/`.
+`./scripts/run_worker.sh cron --now` from `apex-assessment/`.
