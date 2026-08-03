@@ -41,8 +41,8 @@ time you run it. See [Selective services](#selective-services) below.
 The 6 app services in `docker-compose.yml` (`algojobs-service`, `apex`, `personalized`,
 `nest`, `frontend`, `agent-server`) are each gated behind a Compose `profiles:` entry
 matching their name — same mechanism already used for `livekit`. Bare `docker compose
-up -d` / `docker compose build` therefore only touch infra (`redis`/`keycloak`/
-`elasticmq`/`minio`) by default; nothing app-level starts or builds without a profile.
+up -d` / `docker compose build` therefore only touch infra (`redis`/`elasticmq`/`minio`)
+by default; nothing app-level starts or builds without a profile.
 
 `./start.sh` and `./start.sh --build` pass the right `--profile` flags for you, driven
 by env vars (`START_APEX`, `START_NEST`, `START_FRONTEND`, `START_ALGOJOBS_SERVICE`,
@@ -82,7 +82,7 @@ docker compose build <service> [<service> ...]
 docker compose up -d <service> [<service> ...]
 ```
 
-`<service>`: `frontend` `nest` `apex` `personalized` `agent-server` `algojobs-service` `elasticmq` `redis` `keycloak` `minio`
+`<service>`: `frontend` `nest` `apex` `personalized` `agent-server` `algojobs-service` `elasticmq` `redis` `minio`
 
 Only rebuilds/recreates the named container(s) — the rest of the stack keeps running.
 Naming a service explicitly bypasses profile filtering, so this always works regardless

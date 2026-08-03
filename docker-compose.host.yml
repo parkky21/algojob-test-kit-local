@@ -28,13 +28,6 @@ services:
     network_mode: host
     ports: !reset []
 
-  keycloak:
-    network_mode: host
-    ports: !reset []
-    # Host networking can't remap 8180->8080, so Keycloak must listen on 8180
-    # directly. nest's KEYCLOAK_URL below matches.
-    command: start-dev --http-port=8180
-
   elasticmq:
     network_mode: host
     ports: !reset []
@@ -83,7 +76,6 @@ services:
     ports: !reset []
     environment:
       REDIS_HOST: localhost
-      KEYCLOAK_URL: http://localhost:8180
       PYTHON_SERVICE_URL: http://localhost:8000/api/v1
       PYTHON_PERSONALIZED_SERVICE: http://localhost:8070
       ALGOAPEX_API_URL: http://localhost:8001/v1

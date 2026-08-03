@@ -11,7 +11,7 @@ Two supported paths:
 # Running AlgoJob locally
 
 All 7 services run natively (no Docker) for app code — `npm run dev`, `npm run start:dev`,
-`uv run main.py`. Only four infra pieces run in Docker: Redis, Keycloak, ElasticMQ (a local
+`uv run main.py`. Only three infra pieces run in Docker: Redis, ElasticMQ (a local
 SQS-compatible emulator), and MinIO (a local S3-compatible emulator), because they're
 stateful/Java(-ish) and nobody edits their code.
 
@@ -27,7 +27,7 @@ them, unchanged.
 Starts shared infra (stopping a native Homebrew Redis on 6379 first, if running), waits for it to
 report healthy, then launches every enabled service in one terminal with prefixed, color-coded
 output — also written to `logs/<service>.log`. Ctrl-C stops all native services; infra is left
-running (cheap, and Keycloak is slow to restart). `./dev.sh --down` stops infra.
+running (cheap, and containers can be slow to restart). `./dev.sh --down` stops infra.
 
 To skip a service (e.g. you don't need proctoring or personalized-learning today), comment out its
 line in the `SERVICES` array at the top of `dev.sh` — nothing else changes. `./dev.sh --list` shows
@@ -43,7 +43,7 @@ against both on startup).
 ```bash
 # once, before anything else
 brew services stop redis          # frees 6379 for the Docker one
-cd infra && docker compose up -d  # redis, keycloak, elasticmq, minio
+cd infra && docker compose up -d  # redis, elasticmq, minio
 ```
 
 ### livekit-local — LiveKit server (native)
@@ -120,9 +120,9 @@ cd interview-proctoring && ./run.sh
 cd algojob_nest && ./run.sh
 ```
 - Port: **5001**
-- Requires: `infra` up (redis, keycloak, minio)
-- `.env` already has `REDIS_HOST=localhost`/`REDIS_PORT=6379`, `KEYCLOAK_URL=http://localhost:8180`,
-  and the local `SQS_ENDPOINT_URL`/`SQS_*_URL` overrides — nothing to add
+- Requires: `infra` up (redis, minio)
+- `.env` already has `REDIS_HOST=localhost`/`REDIS_PORT=6379` and the local
+  `SQS_ENDPOINT_URL`/`SQS_*_URL` overrides — nothing to add
 - To point audio storage at the local MinIO instead of real AWS S3, set in `.env`:
   `S3_ENDPOINT_URL=http://localhost:9000`, `S3_ENDPOINT_ACCESS_KEY_ID=minioadmin`,
   `S3_ENDPOINT_SECRET_ACCESS_KEY=minioadmin` (`S3_PUBLIC_ENDPOINT_URL` can be omitted natively — it
@@ -130,9 +130,7 @@ cd algojob_nest && ./run.sh
   `AWS_SECRET_ACCESS_KEY` keep meaning "real AWS" — see the apex note above; the same
   `S3_LOCAL_ONLY=true` seatbelt applies here too.
 - Health: `curl localhost:5001/health` — also watch the startup log for the
-  `IntegrationConnectivityService` summary (Mongo/Redis/Keycloak/AlgoApex OK/FAIL per integration)
-- One-time manual step: create realm `algo-jobs` in the Keycloak admin console
-  (`http://localhost:8180`, admin/admin) — until then `keycloak: FAIL` in that summary is expected
+  `IntegrationConnectivityService` summary (Mongo/Redis/AlgoApex OK/FAIL per integration)
 
 ### algojobs_frontend — web UI (Next.js)
 ```bash
@@ -156,7 +154,6 @@ cd algojobs_frontend && ./run.sh
 | apex | 8001 |
 | debug-assessment | 8070 |
 | interview-proctoring | 8080 |
-| keycloak (infra) | 8180 |
 | elasticmq (infra) | 9324 (+9325 UI) |
 | minio (infra) | 9000 (+9001 console) |
 
@@ -183,7 +180,7 @@ root `.env`). The bucket `algojobterraformstate` is auto-created on startup by t
 to correctly treat that container's clean exit as success.
 
 nest's own startup logs also run a connectivity prober (`integration-connectivity.service.ts`)
-that reports OK/SKIP/FAIL for Mongo, Redis, Keycloak, and AlgoApex on boot — the fastest signal
+that reports OK/SKIP/FAIL for Mongo, Redis, and AlgoApex on boot — the fastest signal
 that wiring is correct.
 
 ### Seeding question audio
@@ -218,8 +215,8 @@ The one real reason is **WebRTC**. Docker containers on macOS run inside a Linux
 Desktop), so LiveKit's and agent-server's real-time media takes an extra network hop through the VM
 boundary. Running those natively avoids it, which matters for interview quality.
 
-Redis/Keycloak/ElasticMQ have no such problem — they're plain TCP, so Docker is fine there and far
-simpler than installing Java locally for Keycloak and ElasticMQ.
+Redis/ElasticMQ have no such problem — they're plain TCP, so Docker is fine there and far
+simpler than installing Java locally for ElasticMQ.
 
 Note: an earlier version of this document claimed Docker's DNS resolver broke `mongodb+srv://` SRV
 lookups to Atlas. **That was wrong** — a direct test (`docker run python:3.12-slim` + `pymongo`
@@ -234,7 +231,7 @@ The repo root has a `Dockerfile` + `docker-compose.yml`. Four services (`algojob
 `apex`, `personalized`, `agent-server`) build into **one shared image** from the root
 `Dockerfile`; `nest` and `frontend` each build from their **own repo's `Dockerfile`**
 instead (see "Independent builds" below). All six run as **one container per service**,
-alongside redis/keycloak/elasticmq/minio.
+alongside redis/elasticmq/minio.
 
 ## One container per service — plus LiveKit natively
 
@@ -476,15 +473,11 @@ curl -f localhost:9000/minio/health/live  # minio
 ```
 
 Then check nest's startup log for its `IntegrationConnectivityService` summary — it reports
-OK/FAIL for Mongo, Redis, Keycloak and AlgoApex in one line, which is the fastest signal that
+OK/FAIL for Mongo, Redis and AlgoApex in one line, which is the fastest signal that
 everything wired up.
 
 **Firewall:** open 3000 (frontend), 5001 (nest API) and LiveKit's 7880/tcp, 7881/tcp,
-7882/udp to clients. The rest (8000/8001/8070/8080/6379/8180/9324) are internal — keep them closed.
-
-**Expect one failure on first boot:** `keycloak: FAIL — realm "algo-jobs" missing`. Create that
-realm once at `http://your-server:8180` (admin/admin by default — change it via `KEYCLOAK_ADMIN` /
-`KEYCLOAK_ADMIN_PASSWORD`).
+7882/udp to clients. The rest (8000/8001/8070/8080/6379/9324) are internal — keep them closed.
 
 ## interview-proctoring is NOT in this image
 
@@ -520,7 +513,7 @@ identically on macOS and Linux. Services address each other by service name (`ne
 relying on each `.env`'s `localhost:` values.
 
 **Verified working on macOS** — all six HTTP services return healthy, agent-server registers with
-LiveKit, and nest's integration prober reports `ok=6 fail=1` (only the Keycloak realm, see below).
+LiveKit, and nest's integration prober reports all integrations OK.
 
 For a Linux deploy, add the host-networking overlay:
 

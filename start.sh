@@ -17,7 +17,7 @@
 # frontend, agent-server — e.g. `./start.sh --only=nest,frontend` starts
 # exactly those two (and turns every other service off, overriding whatever
 # the START_* env vars say).
-# Infra (redis/keycloak/elasticmq/minio) always starts regardless of selection.
+# Infra (redis/elasticmq/minio) always starts regardless of selection.
 #
 # LiveKit is the one service left outside Docker. It advertises a single IP as
 # its ICE candidate, and under bridge networking no value works for both the
@@ -28,7 +28,7 @@
 #
 # Docker Compose cannot start a host process, so this wrapper does it. LiveKit
 # runs in the FOREGROUND: its logs are visible and Ctrl-C stops it. Containers
-# are deliberately left running afterwards (Keycloak is slow to restart);
+# are deliberately left running afterwards (containers can be slow to restart);
 # use ./start.sh --down to stop them.
 set -uo pipefail
 
