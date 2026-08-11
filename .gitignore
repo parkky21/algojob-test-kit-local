@@ -6,6 +6,7 @@ algojobs_frontend/
 apex-assessment/
 interview-proctoring/
 debug-assessment/
+aptitude-assessment/
 
 # Pre-rename folder names (GitHub repos renamed 2026-08-03) — keep ignored
 # until every checkout has migrated via clone.sh's delete-and-reclone prompt.
