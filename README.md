@@ -1,6 +1,6 @@
 # AlgoJob dev stack
 
-Orchestration only — service code lives in 7 repos, pulled in by `clone.sh`. Full docs: [RUNBOOK.md](RUNBOOK.md).
+Orchestration only — service code lives in 8 repos, pulled in by `clone.sh` (every repo clones from `main`). Full docs: [RUNBOOK.md](RUNBOOK.md).
 
 ## Setup
 
@@ -19,6 +19,7 @@ algojobs_frontend/.env
 apex-assessment/.env
 debug-assessment/.env
 interview-proctoring/.env
+aptitude-assessment/.env
 ```
 
 ```bash

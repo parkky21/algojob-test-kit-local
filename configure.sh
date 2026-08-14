@@ -14,8 +14,9 @@
 # build from their own Dockerfile instead (docker-compose.yml's "INDEPENDENT
 # BUILDS" note), so declining one of those only affects that one service —
 # e.g. you can clone/build/start just nest + frontend without the other four
-# at all. Only interview-proctoring (native-only) is always safe to skip
-# with zero build-time consequences. This script warns inline per-repo.
+# at all. Only interview-proctoring and aptitude-assessment (native-only) are
+# always safe to skip with zero build-time consequences. This script warns
+# inline per-repo.
 set -uo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -30,6 +31,7 @@ REPOS=(
   "apex-assessment|apex — AlgoApex assessment (FastAPI + SQS workers)|CLONE_APEX|1|START_APEX"
   "debug-assessment|personalized — content generation (FastAPI)|CLONE_PERSONALIZED|1|START_PERSONALIZED"
   "interview-proctoring|proctoring — AI exam proctoring (native-only, not in the Docker build)|CLONE_PROCTORING|0|"
+  "aptitude-assessment|aptitude — diagnostic aptitude testing (native-only, not in the Docker build)|CLONE_APTITUDE|0|"
 )
 
 echo "AlgoJob setup — clone selection"
@@ -37,7 +39,7 @@ echo "agent-server, algojobs-service, apex, and personalized share ONE Docker im
 echo "— declining any of those breaks 'docker compose build' entirely, even for"
 echo "repos you keep. nest and frontend each build independently (their own"
 echo "Dockerfile), so you can clone/build/run just those two on their own. Only"
-echo "proctoring (native-only) is always safe to skip."
+echo "proctoring and aptitude (native-only) are always safe to skip."
 echo
 
 for entry in "${REPOS[@]}"; do
@@ -93,7 +95,7 @@ if [ "${START_FRONTEND:-0}" = "1" ] && [ "${START_NEST:-0}" != "1" ]; then
 fi
 
 export CLONE_AGENT_SERVER CLONE_ALGOJOBS_SERVICE CLONE_NEST CLONE_FRONTEND CLONE_APEX \
-  CLONE_PERSONALIZED CLONE_PROCTORING \
+  CLONE_PERSONALIZED CLONE_PROCTORING CLONE_APTITUDE \
   START_AGENT_SERVER START_ALGOJOBS_SERVICE START_NEST START_FRONTEND START_APEX \
   START_PERSONALIZED
 

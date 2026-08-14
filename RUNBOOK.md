@@ -106,6 +106,21 @@ cd debug-assessment && ./run.sh
 - Requires: nothing local — only cloud Mongo
 - Health: `curl localhost:8070/health`
 
+### aptitude-assessment — diagnostic aptitude testing (FastAPI)
+```bash
+cd aptitude-assessment && ./run.sh
+```
+- Port: **8090** (`API_PORT` in `.env`)
+- Requires: a Postgres database (Neon in every non-local environment) — `DATABASE_URL` in
+  `.env`. `./run.sh` runs `alembic upgrade head` automatically before starting.
+- **Scaffold status:** structure and wiring only — every module's business logic raises
+  `NotImplementedError`. See `aptitude-assessment/CLAUDE.md` for the design record and what's
+  built vs. stubbed. Not yet wired into the shared Docker image (`docker-compose.yml`) or the
+  root `Dockerfile`'s multi-stage build — see that file's "Stack registration" section for what
+  those edits require; `dev.sh`'s native path and `infra/elasticmq.conf`'s two
+  `algoaptitude-*.fifo` queues are already in place.
+- Health: `curl localhost:8090/v1/health`
+
 ### interview-proctoring — AI exam proctoring (FastAPI + YOLO/MediaPipe)
 ```bash
 cd interview-proctoring && ./run.sh
@@ -154,6 +169,7 @@ cd algojobs_frontend && ./run.sh
 | apex | 8001 |
 | debug-assessment | 8070 |
 | interview-proctoring | 8080 |
+| aptitude-assessment | 8090 |
 | elasticmq (infra) | 9324 (+9325 UI) |
 | minio (infra) | 9000 (+9001 console) |
 
@@ -164,6 +180,7 @@ curl localhost:8000/health          # interview_manager
 curl localhost:8001/v1/health       # apex
 curl localhost:8070/health          # debug-assessment
 curl localhost:8080/health          # interview-proctoring
+curl localhost:8090/v1/health       # aptitude-assessment (scaffold only — see its CLAUDE.md)
 curl localhost:5001/health          # nest
 curl localhost:3000                 # frontend
 curl localhost:3000/api/config      # confirm livekitUrl is ws://localhost:7880, not a cloud host
@@ -291,13 +308,21 @@ auto-enable `nest` whenever `frontend` is selected, for exactly this reason.
 
 `clone.sh` has the matching shape for which repos to clone (`CLONE_AGENT_SERVER`,
 `CLONE_ALGOJOBS_SERVICE`, `CLONE_NEST`, `CLONE_FRONTEND`, `CLONE_APEX`,
-`CLONE_PERSONALIZED`, `CLONE_PROCTORING`). Declining `interview_manager`/
-`apex-assessment`/`debug-assessment`/`algojob-agent-server` breaks
+`CLONE_PERSONALIZED`, `CLONE_PROCTORING`, `CLONE_APTITUDE`). Declining
+`interview_manager`/`apex-assessment`/`debug-assessment`/`algojob-agent-server` breaks
 `docker compose build` outright for **all four** of those (shared image), even the ones
 you kept; declining `algojob_nest`/`algojobs_frontend` only affects that one service
 (independent build) — `clone.sh --list` marks which are which, `configure.sh` warns
-inline per-repo. Only `interview-proctoring` (native-only) is unconditionally safe to
-skip.
+inline per-repo. Only `interview-proctoring` and `aptitude-assessment` (both
+native-only, neither in the Docker build) are unconditionally safe to skip.
+
+**Clone branch.** Every repo in `clone.sh` now clones from `main`. Some of them still
+carry the `local-run` branch that used to be the per-repo default — it is opt-in now:
+`./clone.sh local-run` overrides the branch for every repo in one go. `clone.sh --list`
+prints the current repo → branch mapping. Note that the branch only applies to a *fresh*
+clone: for a folder that already has a `.git`, `clone.sh` deliberately only fetches and
+prints the branch you're on, so switching an existing checkout to `main` is a manual
+`git checkout main` in that repo.
 
 ### Switching LiveKit: Cloud vs local native
 

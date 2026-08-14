@@ -2,18 +2,23 @@
 # Clones (or updates) the AlgoJob service repos into this directory, each into
 # a folder matching its (current) repo name.
 #
-#   ./clone.sh                 clone/update the selected repos, each on its default branch
-#   ./clone.sh local-run       override the branch for every repo that has one
+#   ./clone.sh                 clone/update the selected repos, each on main
+#   ./clone.sh local-run       override the branch for every repo (opt-in only)
 #   ./clone.sh --list          show the repo -> branch mapping (and enabled/skipped) and exit
 #
-# Selection is per-repo via env vars (CLONE_AGENT_SERVER, CLONE_ALGOJOBS_SERVICE,
-# CLONE_NEST, CLONE_FRONTEND, CLONE_APEX, CLONE_PERSONALIZED, CLONE_PROCTORING —
-# see the SERVICES table below), each defaulting to 1 (clone) if unset. No
-# config file is read — this is stateless by design. Run ./configure.sh for an
-# interactive per-repo picker (it exports these and calls this script for you),
-# or export them yourself for a one-off: `CLONE_PROCTORING=0 ./clone.sh`.
+# Every repo clones from `main` by default. `local-run` branches still exist on
+# some of these repos, but they are no longer the default — pass the branch
+# name explicitly if you want one.
 #
-# WARNING: four of the seven repos (algojob-agent-server, interview_manager,
+# Selection is per-repo via env vars (CLONE_AGENT_SERVER, CLONE_ALGOJOBS_SERVICE,
+# CLONE_NEST, CLONE_FRONTEND, CLONE_APEX, CLONE_PERSONALIZED, CLONE_PROCTORING,
+# CLONE_APTITUDE — see the SERVICES table below), each defaulting to 1 (clone)
+# if unset. No config file is read — this is stateless by design. Run
+# ./configure.sh for an interactive per-repo picker (it exports these and calls
+# this script for you), or export them yourself for a one-off:
+# `CLONE_PROCTORING=0 ./clone.sh`.
+#
+# WARNING: four of the eight repos (algojob-agent-server, interview_manager,
 # apex-assessment, debug-assessment) are built into one shared Docker image
 # (see Dockerfile) — skipping any of THOSE (marked "required" in --list /
 # SERVICES below) means `docker compose build` fails outright on its COPY
@@ -28,8 +33,9 @@
 # skipping them still blocks that path too — but not the other 4 services'
 # individual containers.)
 #
-# Only interview-proctoring (native-only, excluded from the Docker build
-# entirely) is safe to skip freely with no build-time consequences.
+# Only interview-proctoring and aptitude-assessment (native-only, excluded
+# from the Docker build entirely) are safe to skip freely with no build-time
+# consequences.
 set -uo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -38,17 +44,18 @@ cd "$ROOT_DIR"
 ORG="https://github.com/algorootprod"
 
 # folder (= repo name)|default-branch|CLONE_* env var|required-for-docker-build(1/0)
-# algojob-proctoring-mise and Algojob-debug-mise were split out of the old
-# algojob_microservice_python monorepo (see git history there) into their
-# own repos; those only have `main`, not `local-run`.
+# All repos clone from `main`. Several of them also carry a `local-run` branch
+# (that used to be the default here) — pass `./clone.sh local-run` if you
+# specifically want those; main is what everyone should be on otherwise.
 SERVICES=(
-  "algojob-agent-server|local-run|CLONE_AGENT_SERVER|1"
-  "interview_manager|local-run|CLONE_ALGOJOBS_SERVICE|1"
-  "algojob_nest|local-run|CLONE_NEST|1"
-  "algojobs_frontend|local-run|CLONE_FRONTEND|1"
-  "apex-assessment|local-run|CLONE_APEX|1"
+  "algojob-agent-server|main|CLONE_AGENT_SERVER|1"
+  "interview_manager|main|CLONE_ALGOJOBS_SERVICE|1"
+  "algojob_nest|main|CLONE_NEST|1"
+  "algojobs_frontend|main|CLONE_FRONTEND|1"
+  "apex-assessment|main|CLONE_APEX|1"
   "interview-proctoring|main|CLONE_PROCTORING|0"
   "debug-assessment|main|CLONE_PERSONALIZED|1"
+  "aptitude-assessment|main|CLONE_APTITUDE|0"
 )
 
 # The GitHub repos above were renamed on 2026-08-03 (org: algorootprod).
@@ -101,6 +108,7 @@ done
 : "${CLONE_APEX:=1}"
 : "${CLONE_PROCTORING:=1}"
 : "${CLONE_PERSONALIZED:=1}"
+: "${CLONE_APTITUDE:=1}"
 
 if [ "${1:-}" = "--list" ]; then
   printf "%-25s %-10s %-9s %s\n" "REPO (= folder)" "BRANCH" "REQUIRED" "STATUS"

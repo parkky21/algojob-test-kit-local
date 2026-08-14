@@ -28,6 +28,7 @@ SERVICES=(
   # "algojobsvc   |interview_manager                                          |./run.sh"
   # "apex         |apex-assessment                                            |./run.sh"
   # "personalized |debug-assessment                                           |./run.sh"
+  # "aptitude     |aptitude-assessment                                        |./run.sh"
   "nest         |algojob_nest                                               |./run.sh"
   "frontend     |algojobs_frontend                                          |./run.sh"
   # "agent        |algojob-agent-server                                       |./run-agent.sh"
