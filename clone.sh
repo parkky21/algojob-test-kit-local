@@ -101,7 +101,7 @@ for entry in "${LEGACY_RENAMES[@]}"; do
   echo
 done
 
-: "${CLONE_AGENT_SERVER:=1}"
+: "${CLONE_AGENT_SERVER:=0}"
 : "${CLONE_ALGOJOBS_SERVICE:=1}"
 : "${CLONE_NEST:=1}"
 : "${CLONE_FRONTEND:=1}"
