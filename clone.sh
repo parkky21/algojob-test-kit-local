@@ -48,14 +48,14 @@ ORG="https://github.com/algorootprod"
 # (that used to be the default here) — pass `./clone.sh local-run` if you
 # specifically want those; main is what everyone should be on otherwise.
 SERVICES=(
-  "algojob-agent-server|main|CLONE_AGENT_SERVER|1"
+  "algojob-agent-server|main|CLONE_AGENT_SERVER|0"
+  "interview-proctoring|main|CLONE_PROCTORING|0"
   "interview_manager|main|CLONE_ALGOJOBS_SERVICE|1"
   "algojob_nest|main|CLONE_NEST|1"
   "algojobs_frontend|main|CLONE_FRONTEND|1"
   "apex-assessment|main|CLONE_APEX|1"
-  "interview-proctoring|main|CLONE_PROCTORING|0"
   "debug-assessment|main|CLONE_PERSONALIZED|1"
-  "aptitude-assessment|main|CLONE_APTITUDE|0"
+  "aptitude-assessment|main|CLONE_APTITUDE|1"
 )
 
 # The GitHub repos above were renamed on 2026-08-03 (org: algorootprod).
