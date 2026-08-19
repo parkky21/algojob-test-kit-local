@@ -29,9 +29,20 @@ report healthy, then launches every enabled service in one terminal with prefixe
 output — also written to `logs/<service>.log`. Ctrl-C stops all native services; infra is left
 running (cheap, and containers can be slow to restart). `./dev.sh --down` stops infra.
 
+**Every run starts fresh.** Before launching anything, `dev.sh` stops whatever is still listening
+on an enabled service's port (SIGTERM, then SIGKILL after five seconds). Without that, a leftover
+process from an earlier run keeps the port, the new service exits with `Address already in use`
+buried in its own log, and everything downstream keeps talking to the stale one — which, if it has
+wedged, accepts connections and answers nothing, so callers hang until their own timeout rather
+than failing fast. Infra ports (6379 · 9324/9325 · 9000/9001) and anything owned by Docker are
+never touched, so this is safe alongside `./start.sh`. Pass `--no-reclaim` to opt out.
+
 To skip a service (e.g. you don't need proctoring or personalized-learning today), comment out its
 line in the `SERVICES` array at the top of `dev.sh` — nothing else changes. `./dev.sh --list` shows
-what's currently enabled.
+what's currently enabled, with each service's port.
+
+Each service's port lives in the fourth column of that `SERVICES` array — keep it in step with the
+[port map](#port-map) below, since that column is what gets reclaimed.
 
 ## Manual — one terminal per service
 

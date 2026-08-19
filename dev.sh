@@ -12,34 +12,58 @@
 #   ./dev.sh --quiet          don't stream any logs to the terminal; just
 #                             write to logs/<service>.log (tail what you need)
 #   ./dev.sh --no-infra       skip the infra preflight (already running)
+#   ./dev.sh --no-reclaim     don't free service ports first (see below)
 #   ./dev.sh --down           stop the shared infra stack and exit
 #   ./dev.sh --list           print which services are enabled/skipped and exit
+#
+# Every run starts fresh: before launching anything, whatever is still
+# listening on an enabled service's port is stopped. Without that, a leftover
+# process keeps the port, the new one exits with "Address already in use"
+# buried in its own log, and everything downstream then talks to the stale
+# process — which, if it has wedged, accepts connections and answers nothing,
+# so callers hang until their own timeout instead of failing fast. Pass
+# --no-reclaim to leave existing processes alone.
 set -uo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 LOG_DIR="$ROOT_DIR/logs"
 
-# name | relative dir | command
+# name | relative dir | command | port(s)
 # Every service dir has its own top-level run script — dev.sh just calls it.
 # Run a single service by hand the exact same way: cd <dir> && ./<script>.
+#
+# The port column is what gets reclaimed before startup. Comma-separate if a
+# service listens on more than one; leave it empty for services that don't
+# listen at all (agent-server is an outbound worker). Keep it in step with the
+# port map in RUNBOOK.md.
 SERVICES=(
-  # "agent        |algojob-agent-server                                       |./run-agent.sh"
-  # "livekit      |livekit-local                                              |./run-livekit.sh"
-  # "proctoring   |interview-proctoring                                       |./run.sh"
-  "algojobsvc   |interview_manager                                          |./run.sh"
-  "apex         |apex-assessment                                            |./run.sh"
-  "personalized |debug-assessment                                           |./run.sh"
-  "aptitude     |aptitude-assessment                                        |./run.sh"
-  "nest         |algojob_nest                                               |./run.sh"
-  "frontend     |algojobs_frontend                                          |./run.sh"
+  # "agent        |algojob-agent-server                                       |./run-agent.sh|"
+  # "livekit      |livekit-local                                              |./run-livekit.sh|7880,7881"
+  # "proctoring   |interview-proctoring                                       |./run.sh|8080"
+  "algojobsvc   |interview_manager                                          |./run.sh|8000"
+  "apex         |apex-assessment                                            |./run.sh|8001"
+  "personalized |debug-assessment                                           |./run.sh|8070"
+  "aptitude     |aptitude-assessment                                        |./run.sh|8090"
+  "nest         |algojob_nest                                               |./run.sh|5001"
+  "frontend     |algojobs_frontend                                          |./run.sh|3000"
 )
 
 COLORS=(31 32 33 34 35 36 91 92 93 94)
 INFRA_CONTAINERS=(algojob-infra-redis algojob-infra-elasticmq algojob-infra-minio)
 
+# Never reclaimed, even if one is mistakenly added to SERVICES above: infra runs
+# in Docker and is deliberately left up between runs (it is cheap, and the
+# containers are slow to restart). redis · elasticmq (+UI) · minio (+console).
+INFRA_PORTS=(6379 9324 9325 9000 9001)
+
+# Count of ports this run actually had to clear; reported at the end of the
+# preflight so a clean start is distinguishable from a busy one.
+RECLAIMED=0
+
 do_list=false
 do_down=false
 no_infra=false
+no_reclaim=false
 quiet=false
 service_filter=()
 for arg in "$@"; do
@@ -47,9 +71,10 @@ for arg in "$@"; do
     --list) do_list=true ;;
     --down) do_down=true ;;
     --no-infra) no_infra=true ;;
+    --no-reclaim) no_reclaim=true ;;
     --quiet|-q) quiet=true ;;
     --*)
-      echo "Unknown flag: $arg (expected --list, --down, --no-infra, or --quiet)" >&2
+      echo "Unknown flag: $arg (expected --list, --down, --no-infra, --no-reclaim, or --quiet)" >&2
       exit 1
       ;;
     *)
@@ -72,7 +97,8 @@ if $do_list; then
   echo "Enabled services (edit the SERVICES array in dev.sh to change):"
   for entry in "${SERVICES[@]}"; do
     name="$(cut -d'|' -f1 <<<"$entry" | xargs)"
-    echo "  - $name"
+    ports="$(cut -d'|' -f4 <<<"$entry" | xargs)"
+    printf "  - %-13s %s\n" "$name" "${ports:+port ${ports}}"
   done
   exit 0
 fi
@@ -106,6 +132,92 @@ if ! $no_infra; then
       echo "  -> did not become healthy in time; check 'docker compose -f infra/docker-compose.yml logs $container'" >&2
     fi
   done
+fi
+
+# ---- port preflight --------------------------------------------------------
+
+# PIDs listening on $1, minus this script and anything owned by Docker.
+#
+# Docker is excluded rather than killed because when the stack is run the other
+# way (./start.sh) the ports belong to com.docker.backend, and killing that
+# takes down the whole Docker VM rather than one service.
+listeners_on() {
+  local port="$1" pid comm
+  command -v lsof >/dev/null 2>&1 || return 0
+  lsof -nP -iTCP:"$port" -sTCP:LISTEN -t 2>/dev/null | sort -u | while IFS= read -r pid; do
+    [ -z "$pid" ] && continue
+    [ "$pid" = "$$" ] && continue
+    comm="$(ps -o comm= -p "$pid" 2>/dev/null)"
+    case "$comm" in
+      *com.docker*|*Docker*|*docker*) continue ;;
+    esac
+    printf '%s\n' "$pid"
+  done
+}
+
+# Free one port so the service about to start can bind it.
+reclaim_port() {
+  local name="$1" port="$2" reserved pids pid waited
+
+  for reserved in "${INFRA_PORTS[@]}"; do
+    if [ "$port" = "$reserved" ]; then
+      echo "  $name: refusing to reclaim $port — that is an infra port, left alone by design" >&2
+      return 0
+    fi
+  done
+
+  pids="$(listeners_on "$port")"
+  [ -z "$pids" ] && return 0
+
+  echo "  $name: port $port is in use by PID(s) $(echo $pids) — stopping them"
+  RECLAIMED=$((RECLAIMED + 1))
+  # shellcheck disable=SC2086 — deliberate word splitting; one PID per line.
+  kill $pids 2>/dev/null
+
+  # SIGTERM first, but do not trust it. The case this preflight exists for is a
+  # process that has stopped responding, and those ignore it.
+  waited=0
+  while [ "$waited" -lt 20 ]; do
+    sleep 0.25
+    pids="$(listeners_on "$port")"
+    [ -z "$pids" ] && return 0
+    waited=$((waited + 1))
+  done
+
+  echo "  $name: port $port still held after SIGTERM — sending SIGKILL"
+  # shellcheck disable=SC2086
+  kill -9 $pids 2>/dev/null
+  sleep 0.5
+
+  pids="$(listeners_on "$port")"
+  if [ -n "$pids" ]; then
+    echo "  $name: port $port STILL held by $(echo $pids) — $name will fail to bind." >&2
+    echo "         Check it by hand: lsof -nP -iTCP:$port -sTCP:LISTEN" >&2
+    return 1
+  fi
+}
+
+if ! $no_reclaim; then
+  echo "Freeing service ports so everything starts fresh..."
+  RECLAIMED=0
+  for entry in "${SERVICES[@]}"; do
+    name="$(cut -d'|' -f1 <<<"$entry" | xargs)"
+    dir="$(cut -d'|' -f2 <<<"$entry" | xargs)"
+    ports="$(cut -d'|' -f4 <<<"$entry" | xargs)"
+    [ -z "$ports" ] && continue
+    [ -d "$ROOT_DIR/$dir" ] || continue
+    # Split on commas for the services that listen on more than one.
+    IFS=',' read -r -a port_list <<<"$ports"
+    for port in "${port_list[@]}"; do
+      port="$(echo "$port" | xargs)"
+      [ -z "$port" ] && continue
+      reclaim_port "$name" "$port"
+    done
+  done
+  if [ "$RECLAIMED" -eq 0 ]; then
+    echo "  nothing was listening — all ports were already free."
+  fi
+  echo
 fi
 
 mkdir -p "$LOG_DIR"
