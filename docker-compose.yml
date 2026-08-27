@@ -295,6 +295,12 @@ services:
       SQS_USER_SIGNUP_URL: http://elasticmq:9324/000000000000/algoapex-user-signup.fifo
       SQS_TEST_COMPLETED_URL: http://elasticmq:9324/000000000000/algoapex-test-completed.fifo
       SQS_EVALUATION_COMPLETED_URL: http://elasticmq:9324/000000000000/algoapex-evaluation-completed.fifo
+      # aptitude-assessment is native-only (not a service in this file), so under
+      # the Docker path nothing drains these — messages just accumulate until it
+      # is run. Declared anyway so nest's queue wiring matches the native stack.
+      SQS_APTITUDE_USER_SIGNUP_URL: http://elasticmq:9324/000000000000/algoaptitude-user-signup.fifo
+      SQS_APTITUDE_TEST_COMPLETED_URL: http://elasticmq:9324/000000000000/algoaptitude-test-completed.fifo
+      SQS_APTITUDE_EVALUATION_COMPLETED_URL: http://elasticmq:9324/000000000000/algoaptitude-evaluation-completed.fifo
     depends_on:
       redis:
         condition: service_healthy
