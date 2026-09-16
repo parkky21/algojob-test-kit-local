@@ -275,9 +275,10 @@ services:
       # placeholder secrets ("change-me-in-production"). That guard is
       # intentional — a real deploy must set real secrets and use production.
       NODE_ENV: ${NEST_NODE_ENV:-development}
-      REDIS_HOST: redis
-      REDIS_PORT: '6379'
-      REDIS_PASSWORD: ''
+      # nest reads only REDIS_URL — it carries realtime notification pushes
+      # between workers. REDIS_HOST/PORT were never read.
+      REDIS_URL: redis://redis:6379/0
+      NOTIFICATIONS_REALTIME_ENABLED: ${NOTIFICATIONS_REALTIME_ENABLED:-true}
       PYTHON_SERVICE_URL: http://algojobs-service:8000/api/v1
       PYTHON_PERSONALIZED_SERVICE: http://personalized:8070
       ALGOAPEX_API_URL: http://apex:8001/v1
