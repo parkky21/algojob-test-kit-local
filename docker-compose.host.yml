@@ -85,6 +85,7 @@ services:
       SQS_USER_SIGNUP_URL: http://localhost:9324/000000000000/algoapex-user-signup.fifo
       SQS_TEST_COMPLETED_URL: http://localhost:9324/000000000000/algoapex-test-completed.fifo
       SQS_EVALUATION_COMPLETED_URL: http://localhost:9324/000000000000/algoapex-evaluation-completed.fifo
+      SQS_EMAIL_DISPATCH_URL: http://localhost:9324/000000000000/algojob-email-dispatch.fifo
 
   frontend:
     network_mode: host

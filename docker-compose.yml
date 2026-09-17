@@ -301,6 +301,11 @@ services:
       SQS_APTITUDE_USER_SIGNUP_URL: http://elasticmq:9324/000000000000/algoaptitude-user-signup.fifo
       SQS_APTITUDE_TEST_COMPLETED_URL: http://elasticmq:9324/000000000000/algoaptitude-test-completed.fifo
       SQS_APTITUDE_EVALUATION_COMPLETED_URL: http://elasticmq:9324/000000000000/algoaptitude-evaluation-completed.fifo
+      # Onboarding/transactional email. `log` prints emails instead of calling
+      # SES: nest's .env points at production Mongo, whose email_settings are
+      # live, so a local stack must never send for real.
+      SQS_EMAIL_DISPATCH_URL: http://elasticmq:9324/000000000000/algojob-email-dispatch.fifo
+      EMAIL_PROVIDER_OVERRIDE: ${EMAIL_PROVIDER_OVERRIDE:-log}
     depends_on:
       redis:
         condition: service_healthy
