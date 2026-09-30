@@ -3,7 +3,7 @@ product: AI Interview
 also_known_as: [mock interview, AI interviewer, the bot interview, HR round, AI mock]
 audience: [candidate]
 internal_service: interview_manager
-last_verified: 2026-09-18
+last_verified: 2026-09-30
 ---
 
 # AI Interview — booking, running, and your report
@@ -133,22 +133,40 @@ mistake patterns, and a **7-day personalised growth roadmap**.
 
 If your interview was recorded, the recording and the full transcript are saved with the report.
 
+**If you answered too few questions to score,** you still get a report, but it has no score. It is
+marked **Insufficient Data** and explains that it could not be generated because the interview did
+not have enough responses to evaluate, with a button to retake the interview. It does not count
+towards your scores or leaderboards, and your credit is returned automatically.
+
+**If the interview was ended for proctoring,** you still get a full report scored from what you said,
+but the verdict is always **No Hire** and the report states that the interview was ended for
+proctoring violations and why.
+
 ## 8. When things go wrong
 
 ### "I joined the interview but there is no report"
-The most common cause: **you have to actually answer some questions.** If you spoke fewer than
-**four times**, no report is generated at all — there is not enough to score. Your credit is
-returned automatically. Book another slot and complete the interview.
+Reports usually appear within a couple of minutes of the call ending — check **Report** again
+shortly. Every interview you actually took part in produces a report, even a very short one. If it
+still has not appeared after about an hour, contact support with the interview date and time.
+
+### "My report says 'Insufficient Data' / a report could not be generated"
+**You have to actually answer some questions.** If you spoke fewer than **four times**, there is not
+enough to score, so the report shows no score and explains that it could not be generated because
+the interview did not have enough responses to evaluate. This is not a failing mark — it does not
+count towards your scores or leaderboards. Your credit is returned automatically. Use **Retake
+interview** on the report, book another slot, and answer each question fully.
 
 ### "My report says 'Evaluation Pending' and the score is 0"
 This means **our scoring failed**, not that you performed badly. Your transcript was saved. This is
 not a reflection of your interview. **Contact support with the interview date and time** — the
 report can be re-scored. Do not treat the 0 as a real score.
 
-### "My score is 0 and it says No Hire"
-If the interview was **ended for proctoring**, the report is automatically scored 0 with a No Hire
-verdict and no AI evaluation is run. Check the report for a termination reason. See
-`42-proctoring-and-integrity.md`.
+### "My report says No Hire because the interview was ended for proctoring"
+If the interview was **ended for proctoring**, your answers are still evaluated so you get real
+feedback and a score, but the verdict is always **No Hire** with high rejection risk. The report
+states that the interview was ended for proctoring violations and gives the reason. In the rare case
+the transcript could not be evaluated, the report shows a score of 0 with the same No Hire verdict.
+See `42-proctoring-and-integrity.md`.
 
 ### "The interview ended before I finished"
 There are several reasons this happens legitimately — silence, reaching the time limit, proctoring
@@ -162,15 +180,16 @@ your browser's site permissions, make sure no other app (Zoom, Meet, Teams) is h
 microphone, and rejoin.
 
 ### "I lost my credit but the interview did not work"
-**You did not lose it.** A credit is held when you start and only actually spent once a report
-exists. If no report was produced, the hold is released automatically. This runs on a regular sweep,
+**You did not lose it.** A credit is held when you start and only actually spent once a scored
+report exists. If no report was produced, or the report says **Insufficient Data**, the hold is
+released automatically. This runs on a regular sweep,
 so allow up to about an hour for the balance to update. If it has not come back after that, contact
 support.
 
 ### "I got disconnected mid-interview"
 If you rejoin quickly the interview continues. If everyone leaves the room, the interview ends
 after a short grace period and is scored on whatever was said. If that was fewer than four answers,
-no report is produced and the credit returns.
+you get an **Insufficient Data** report with no score and the credit returns.
 
 ### "My booked slot disappeared"
 Slots expire once their window closes plus a 5-minute grace. An expired slot cannot be resumed —
@@ -218,8 +237,9 @@ labour the point — and reasoning aloud scores better than silence.
 Usually within a couple of minutes of the call ending. You get a notification.
 
 **Can I get my credit back if I did badly?**
-No. A completed interview that produced a report has used its credit. Credits are only returned
-when no report was produced.
+No. A completed interview that produced a scored report has used its credit. Credits are only
+returned when no report was produced, or when the report says **Insufficient Data** because there
+were too few answers to score.
 
 ## 10. What this does not do
 

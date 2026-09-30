@@ -3,7 +3,7 @@ product: Proctoring and test integrity
 also_known_as: [monitoring, camera check, cheating detection, invigilation, warnings, violations]
 audience: [candidate, college_admin]
 internal_service: interview-proctoring
-last_verified: 2026-09-18
+last_verified: 2026-09-30
 ---
 
 # Proctoring — what is monitored and what happens
@@ -76,9 +76,12 @@ it is not looking for a single glance.
 3. At **10 alerts**, the interview is ended automatically.
 4. You are shown a message and the session closes after about 10 seconds.
 
-**On the report:** an interview ended for proctoring is marked as terminated, scored **0**, and
-given a **No Hire** verdict with high rejection risk. No AI evaluation is run on the transcript. The
-list of alerts is saved with the report.
+**On the report:** an interview ended for proctoring is marked as terminated. The transcript is still
+evaluated so you get feedback on the answers you gave, but the verdict is always **No Hire** with
+high rejection risk, and the report states that the interview was ended for proctoring violations and
+why. The list of alerts is saved with the report. If you answered fewer than four questions before
+it ended, the report is marked **Insufficient Data** instead of scored, and still states that the
+interview was ended for proctoring.
 
 **During a proctored assessment:** the rules screen tells you the limit for that specific
 assessment. Depending on the assessment, exceeding it either warns you or ends and submits the test
@@ -108,8 +111,9 @@ single warning has no consequence at all. Only reaching the limit ends a session
 One event is a warning, nothing more. There is no consequence unless warnings reach the limit.
 
 ### "My interview ended and says I was flagged for cheating"
-That means the session reached 10 alerts. The report is scored 0 with a No Hire verdict and the
-alert list is saved. If you believe this was wrong — a reflection in a mirror, a poorly placed
+That means the session reached 10 alerts. Your answers are still evaluated for feedback, but the
+verdict is always No Hire, the report states that the interview was ended for proctoring and why,
+and the alert list is saved. If you believe this was wrong — a reflection in a mirror, a poorly placed
 camera, a sibling passing repeatedly — **contact support with the interview date and time** and ask
 for the session to be reviewed. Do not simply retake it and hope; get the flagged session reviewed.
 
@@ -142,8 +146,8 @@ the assessment in a quiet room.
 you begin.
 
 **Does one warning affect my score?**
-No. Warnings are recorded but do not reduce your score. Only reaching the limit does, by ending the
-session and scoring it 0.
+No. Warnings are recorded but do not reduce your score. Only reaching the limit matters: the session
+ends, and the report is given a No Hire verdict whatever your answers scored.
 
 **Can I see how many warnings I have?**
 Yes — the counter is visible on the interview screen, and it turns yellow then red as you approach
@@ -180,7 +184,8 @@ record looked at.
 - It does not access anything outside the camera, microphone and, for browser assessments, the
   screen share you explicitly granted.
 - It does not judge your appearance, clothing, background or accent.
-- It does not reduce your score per warning — only ending the session affects the score.
+- It does not reduce your score per warning — only ending the session affects the result, by
+  forcing a No Hire verdict.
 - It does not run when you are not in an assessment or interview.
 
 ## 11. When to contact support

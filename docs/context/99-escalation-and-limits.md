@@ -104,8 +104,8 @@ to be an employee:
 | How many tests do I get? | 3 per week on Basic, 4 on PRO, per arena. | `00`, `21` |
 | How do I get a free AI interview? | 300 XP converts to 1 credit, valid 3 months. | `22` |
 | Why did my interview end early? | Silence, time limit, proctoring, or leaving the room. | `41` |
-| Why is there no report? | Fewer than 4 answers means no report; the credit is returned. | `40` |
-| Why is my score 0? | Proctoring termination, or a scoring failure — check which. | `40`, `42` |
+| Why does my report say Insufficient Data? | Fewer than 4 answers can't be scored; the credit is returned. | `40` |
+| Why is my score 0? | Usually a scoring failure ("Evaluation Pending") — contact support to re-score. Proctoring-ended interviews show No Hire with the reason. | `40`, `42` |
 | Someone walked behind me — am I in trouble? | One warning has no consequence. Only reaching the limit does. | `42` |
 | The test window will not open. | Pop-ups are blocked. Allow them and retry; there is no fallback. | `10` |
 | Where is my score after the test? | Proctored tests never show it at the end. Open Report. | `10` |

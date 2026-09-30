@@ -88,13 +88,15 @@ That means the scoring failed on our side, not that the candidate performed badl
 was saved. **Contact support to have it re-scored.** Do not treat it as a real result or reject on
 it.
 
-### "A candidate has no evaluation at all"
-If the candidate answered fewer than four questions, no evaluation is produced. The interview was
-too short to score. Reschedule.
+### "A candidate's evaluation says 'Insufficient Data' and has no score"
+The candidate answered fewer than four questions, so the interview was too short to score. The
+report says so and the transcript is saved. Reschedule.
 
-### "An evaluation is flagged for proctoring and scored 0"
-The session reached the proctoring alert limit and was ended. The alert list is on the record. If
-the candidate disputes it, contact support for a review rather than deciding from the score alone.
+### "An evaluation is flagged for proctoring with a No Hire verdict"
+The session reached the proctoring alert limit and was ended. The transcript is still evaluated, so
+the report has real scores and feedback, but the verdict is always No Hire and the report states the
+reason. The alert list is on the record. If the candidate disputes it, contact support for a review
+rather than deciding from the verdict alone.
 
 ### "A candidate could not join"
 The interview needs camera and microphone. The most common causes are a blocked permission or

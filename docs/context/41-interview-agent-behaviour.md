@@ -127,7 +127,8 @@ It is not allowed to praise. Neutral acknowledgement is what every answer gets, 
 
 ### "It ended right after I joined"
 If you joined and said nothing, the silence sequence ends the call in under a minute. With fewer
-than four answers, no report is produced and your credit is returned automatically.
+than four answers, your report says **Insufficient Data** instead of a score, and your credit is
+returned automatically.
 
 ### "The audio was choppy / it misheard me"
 Use a wired headset if you have one, and a quiet room. The transcript is what gets scored, so
@@ -164,7 +165,8 @@ Say so out loud. Silence is what triggers the check-in sequence; speech does not
 
 **Can I end it early myself?**
 You can leave the room, and the interview will end. It will be scored on what you said up to that
-point — and if that is fewer than four answers, there will be no report at all.
+point — and if that is fewer than four answers, the report will say **Insufficient Data** rather
+than give a score (your credit is returned).
 
 ## 10. What this does not do
 
